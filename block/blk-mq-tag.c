@@ -136,7 +136,7 @@ unsigned int blk_mq_get_tag(struct blk_mq_alloc_data *data)
 	ws = bt_wait_ptr(bt, data->hctx);
 	do {
 		struct sbitmap_queue *bt_prev;
-
+        //在这执行一次
 		/*
 		 * We're out of tags on this hardware queue, kick any
 		 * pending IO submits before going to sleep waiting for
@@ -151,14 +151,14 @@ unsigned int blk_mq_get_tag(struct blk_mq_alloc_data *data)
 		tag = __blk_mq_get_tag(data, bt);
 		if (tag != -1)
 			break;
-
+        //wait
 		sbitmap_prepare_to_wait(bt, ws, &wait, TASK_UNINTERRUPTIBLE);
 
 		tag = __blk_mq_get_tag(data, bt);
 		if (tag != -1)
 			break;
 
-		bt_prev = bt;
+		bt_prev = bt;       //进行io_schedule
 		io_schedule();
 
 		sbitmap_finish_wait(bt, ws, &wait);
@@ -177,7 +177,7 @@ unsigned int blk_mq_get_tag(struct blk_mq_alloc_data *data)
 		 * previous queue for compensating the wake up miss, so
 		 * other allocations on previous queue won't be starved.
 		 */
-		if (bt != bt_prev)
+		if (bt != bt_prev)          //局部变量在这里面改变了
 			sbitmap_queue_wake_up(bt_prev);
 
 		ws = bt_wait_ptr(bt, data->hctx);
@@ -379,10 +379,10 @@ struct blk_mq_tags *blk_mq_init_tags(unsigned int total_tags,
 	if (!tags)
 		return NULL;
 
-	tags->nr_tags = total_tags;
+	tags->nr_tags = total_tags;                 //这个地方是指的队列深度?
 	tags->nr_reserved_tags = reserved_tags;
 
-	return blk_mq_init_bitmap_tags(tags, node, alloc_policy);
+	return blk_mq_init_bitmap_tags(tags, node, alloc_policy);   //这个地方先跳过
 }
 
 void blk_mq_free_tags(struct blk_mq_tags *tags)

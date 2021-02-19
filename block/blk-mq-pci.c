@@ -32,7 +32,7 @@
  * vector.
  */
 int blk_mq_pci_map_queues(struct blk_mq_queue_map *qmap, struct pci_dev *pdev,
-			    int offset)
+			    int offset)     //主要的是cpu亲和性
 {
 	const struct cpumask *mask;
 	unsigned int queue, cpu;

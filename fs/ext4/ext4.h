@@ -162,13 +162,13 @@ struct ext4_allocation_request {
 	unsigned int flags;
 };
 
-/*
+/* 逻辑块号到物理块号的映射, 被ext4_map_blocks()函数使用
  * Logical to physical block mapping, used by ext4_map_blocks()
  *
  * This structure is used to pass requests into ext4_map_blocks() as
  * well as to store the information returned by ext4_map_blocks().  It
  * takes less room on the stack than a struct buffer_head.
- */
+ */  //它在栈上比起buffer_head结构体花费较少的空间
 #define EXT4_MAP_NEW		(1 << BH_New)
 #define EXT4_MAP_MAPPED		(1 << BH_Mapped)
 #define EXT4_MAP_UNWRITTEN	(1 << BH_Unwritten)
@@ -176,10 +176,10 @@ struct ext4_allocation_request {
 #define EXT4_MAP_FLAGS		(EXT4_MAP_NEW | EXT4_MAP_MAPPED |\
 				 EXT4_MAP_UNWRITTEN | EXT4_MAP_BOUNDARY)
 
-struct ext4_map_blocks {
-	ext4_fsblk_t m_pblk;
-	ext4_lblk_t m_lblk;
-	unsigned int m_len;
+struct ext4_map_blocks {        //逻辑块号到物理块号的映射
+	ext4_fsblk_t m_pblk;        //物理块号
+	ext4_lblk_t m_lblk;         //逻辑块号
+	unsigned int m_len;         //长度，因为在ext4文件系统中，支持了extent status
 	unsigned int m_flags;
 };
 

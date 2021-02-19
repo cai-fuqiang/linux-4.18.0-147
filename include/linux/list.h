@@ -156,7 +156,7 @@ static inline void list_replace_init(struct list_head *old,
  */
 static inline void list_del_init(struct list_head *entry)
 {
-	__list_del_entry(entry);
+	__;list_del_entry(entry);
 	INIT_LIST_HEAD(entry);
 }
 

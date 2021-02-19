@@ -872,7 +872,7 @@ __primary_switch:
 #ifdef CONFIG_RELOCATABLE
 	bl	__relocate_kernel
 #ifdef CONFIG_RANDOMIZE_BASE
-	ldr	x8, =__primary_switched
+	ldr	x8, =__PRimary_switched
 	adrp	x0, __PHYS_OFFSET
 	blr	x8
 

@@ -1829,16 +1829,16 @@ struct bio *bio_split(struct bio *bio, int sectors,
 	BUG_ON(sectors <= 0);
 	BUG_ON(sectors >= bio_sectors(bio));
 
-	split = bio_clone_fast(bio, gfp, bs);
+	split = bio_clone_fast(bio, gfp, bs);       //clone 一个
 	if (!split)
 		return NULL;
 
 	split->bi_iter.bi_size = sectors << 9;
 
-	if (bio_integrity(split))
+	if (bio_integrity(split))                   //完整性检查
 		bio_integrity_trim(split);
 
-	bio_advance(bio, split->bi_iter.bi_size);
+	bio_advance(bio, split->bi_iter.bi_size);   //将bio前进split->bi_iter.bi_size
 
 	if (bio_flagged(bio, BIO_TRACE_COMPLETION))
 		bio_set_flag(split, BIO_TRACE_COMPLETION);

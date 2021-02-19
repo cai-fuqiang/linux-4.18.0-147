@@ -133,7 +133,7 @@ int nvme_reset_ctrl_sync(struct nvme_ctrl *ctrl)
 
 	ret = nvme_reset_ctrl(ctrl);
 	if (!ret) {
-		flush_work(&ctrl->reset_work);
+		flush_work(&ctrl->reset_work);          //执行reset work任务
 		if (ctrl->state != NVME_CTRL_LIVE &&
 		    ctrl->state != NVME_CTRL_ADMIN_ONLY)
 			ret = -ENETRESET;
@@ -729,7 +729,7 @@ blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req,
 		return BLK_STS_IOERR;
 	}
 
-	cmd->common.command_id = req->tag;
+	cmd->common.command_id = req->tag;      //command_id赋值req->tag
 	trace_nvme_setup_cmd(req, cmd);
 	return ret;
 }

@@ -666,8 +666,10 @@ without breaking drivers. The blk_rq_map_sg routine takes care of several
 things like collapsing physically contiguous segments (if QUEUE_FLAG_CLUSTER
 is set) and correct segment accounting to avoid exceeding the limits which
 the i/o hardware can handle, based on various queue properties.
-
+//----防止集群跨越4GB的内存边界?
 - Prevents a clustered segment from crossing a 4GB mem boundary
+//----避免构建超出驱动程序可以处理的物理内存的数量（phys_segments）和
+//----基础硬件可以立即处理的数量的段，并考虑到DMA remapping（hw_segments)
 - Avoids building segments that would exceed the number of physical
   memory segments that the driver can handle (phys_segments) and the
   number that the underlying hardware can handle at once, accounting for

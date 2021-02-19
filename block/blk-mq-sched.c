@@ -134,20 +134,20 @@ static void blk_mq_do_dispatch_ctx(struct blk_mq_hw_ctx *hctx)
 {
 	struct request_queue *q = hctx->queue;
 	LIST_HEAD(rq_list);
-	struct blk_mq_ctx *ctx = READ_ONCE(hctx->dispatch_from);
+	struct blk_mq_ctx *ctx = READ_ONCE(hctx->dispatch_from);    //获取ctx
 
 	do {
 		struct request *rq;
 
-		if (!sbitmap_any_bit_set(&hctx->ctx_map))
+		if (!sbitmap_any_bit_set(&hctx->ctx_map))       //如果map中没有任何软件队列pending
 			break;
 
-		if (!blk_mq_get_dispatch_budget(hctx))
+		if (!blk_mq_get_dispatch_budget(hctx))          //获取预算
 			break;
 
-		rq = blk_mq_dequeue_from_ctx(hctx, ctx);
+		rq = blk_mq_dequeue_from_ctx(hctx, ctx);        //这里面实际上就是调用dispatch_rq_from_ctx获取一个rq
 		if (!rq) {
-			blk_mq_put_dispatch_budget(hctx);
+			blk_mq_put_dispatch_budget(hctx);           //释放预算
 			break;
 		}
 
@@ -158,7 +158,7 @@ static void blk_mq_do_dispatch_ctx(struct blk_mq_hw_ctx *hctx)
 		 */
 		list_add(&rq->queuelist, &rq_list);
 
-		/* round robin for fair dispatch */
+		/* round robin for fair dispatch */             //轮询派发
 		ctx = blk_mq_next_ctx(hctx, rq->mq_ctx);
 
 	} while (blk_mq_dispatch_rq_list(q, &rq_list, true));
@@ -178,15 +178,14 @@ void blk_mq_sched_dispatch_requests(struct blk_mq_hw_ctx *hctx)
 		return;
 
 	hctx->run++;
-
-	/*
+	/*//如果在这个dispatch list 上有更早的条目，把他们抓取出来获取更公平的派发
 	 * If we have previous entries on our dispatch list, grab them first for
 	 * more fair dispatch.
 	 */
-	if (!list_empty_careful(&hctx->dispatch)) {
+	if (!list_empty_careful(&hctx->dispatch)) {             //如果不是空
 		spin_lock(&hctx->lock);
 		if (!list_empty(&hctx->dispatch))
-			list_splice_init(&hctx->dispatch, &rq_list);
+			list_splice_init(&hctx->dispatch, &rq_list);    //将他们移动到rq_list中
 		spin_unlock(&hctx->lock);
 	}
 
@@ -203,21 +202,23 @@ void blk_mq_sched_dispatch_requests(struct blk_mq_hw_ctx *hctx)
 	 * on the dispatch list or we were able to dispatch from the
 	 * dispatch list.
 	 */
-	if (!list_empty(&rq_list)) {
-		blk_mq_sched_mark_restart_hctx(hctx);
+	if (!list_empty(&rq_list)) {                    //先进行这个队列的派发
+		blk_mq_sched_mark_restart_hctx(hctx);       //先不看这个
 		if (blk_mq_dispatch_rq_list(q, &rq_list, false)) {
-			if (has_sched_dispatch)
+			if (has_sched_dispatch)                 //配置了调度器
 				blk_mq_do_dispatch_sched(hctx);
 			else
 				blk_mq_do_dispatch_ctx(hctx);
 		}
-	} else if (has_sched_dispatch) {
+	} else if (has_sched_dispatch) {    //将调度队列中的请求移入rq_list，然后调用
 		blk_mq_do_dispatch_sched(hctx);
-	} else if (hctx->dispatch_busy) {
+	} else if (hctx->dispatch_busy) {   //在硬件队列繁忙时,从软件队列中取出一个IO请求派发
+        //软件队列采用Round-Robin策略
 		/* dequeue request one by one from sw queue if queue is busy */
 		blk_mq_do_dispatch_ctx(hctx);
-	} else {
+	} else {    //不繁忙的情况下，将其flush到到rq_list
 		blk_mq_flush_busy_ctxs(hctx, &rq_list);
+        //然后执行dispatch rq list
 		blk_mq_dispatch_rq_list(q, &rq_list, false);
 	}
 }
@@ -264,7 +265,7 @@ bool blk_mq_bio_list_merge(struct request_queue *q, struct list_head *list,
 	struct request *rq;
 	int checked = 8;
 
-	list_for_each_entry_reverse(rq, list, queuelist) {
+	list_for_each_entry_reverse(rq, list, queuelist) {      //遍历list
 		bool merged = false;
 
 		if (!checked--)
@@ -276,11 +277,11 @@ bool blk_mq_bio_list_merge(struct request_queue *q, struct list_head *list,
 		switch (blk_try_merge(rq, bio)) {
 		case ELEVATOR_BACK_MERGE:
 			if (blk_mq_sched_allow_merge(q, rq, bio))
-				merged = bio_attempt_back_merge(q, rq, bio);
+				merged = bio_attempt_back_merge(q, rq, bio);            //向后merge
 			break;
 		case ELEVATOR_FRONT_MERGE:
 			if (blk_mq_sched_allow_merge(q, rq, bio))
-				merged = bio_attempt_front_merge(q, rq, bio);
+				merged = bio_attempt_front_merge(q, rq, bio);           //向前merge
 			break;
 		case ELEVATOR_DISCARD_MERGE:
 			merged = bio_attempt_discard_merge(q, rq, bio);
@@ -319,9 +320,9 @@ static bool blk_mq_attempt_merge(struct request_queue *q,
 
 bool __blk_mq_sched_bio_merge(struct request_queue *q, struct bio *bio)
 {
-	struct elevator_queue *e = q->elevator;
-	struct blk_mq_ctx *ctx = blk_mq_get_ctx(q);
-	struct blk_mq_hw_ctx *hctx = blk_mq_map_queue(q, bio->bi_opf, ctx);
+	struct elevator_queue *e = q->elevator;                             //电梯调度
+	struct blk_mq_ctx *ctx = blk_mq_get_ctx(q);                         //获取软件队列
+	struct blk_mq_hw_ctx *hctx = blk_mq_map_queue(q, bio->bi_opf, ctx); //获取硬件队列
 	bool ret = false;
 	enum hctx_type type;
 

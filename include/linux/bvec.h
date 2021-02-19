@@ -27,20 +27,20 @@
 /*
  * was unsigned short, but we might as well be ready for > 64kB I/O pages
  */
-struct bio_vec {
-	struct page	*bv_page;
-	unsigned int	bv_len;
-	unsigned int	bv_offset;
+struct bio_vec {                //这个数据结构主要是对一个page中关于此缓冲区的描述
+	struct page	*bv_page;       //数据所在页面的首地址
+	unsigned int	bv_len;     //数据长度
+	unsigned int	bv_offset;  //页面偏移量
 };
 
 struct bvec_iter {
-	sector_t		bi_sector;	/* device address in 512 byte
+	sector_t		bi_sector;	/* device address in 512 byte       //要操作的扇区号
 						   sectors */
-	unsigned int		bi_size;	/* residual I/O count */
+	unsigned int		bi_size;	/* residual I/O count */        //剩余处理的大小
 
-	unsigned int		bi_idx;		/* current index into bvl_vec */
+	unsigned int		bi_idx;		/* current index into bvl_vec */ //当前的bio_vec索引号
 
-	unsigned int            bi_bvec_done;	/* number of bytes completed in
+	unsigned int            bi_bvec_done;	/* number of bytes completed in //当前bio_vec中已经完成的字节数
 						   current bvec */
 	/*
 	 * FOR RH USE ONLY.
@@ -73,27 +73,27 @@ struct bvec_iter {
 	.bv_len		= bvec_iter_len((bvec), (iter)),	\
 	.bv_offset	= bvec_iter_offset((bvec), (iter)),	\
 })
-
+//这个相当于把iter迭代器前进bytes字节
 static inline bool bvec_iter_advance(const struct bio_vec *bv,
 		struct bvec_iter *iter, unsigned bytes)
 {
-	if (WARN_ONCE(bytes > iter->bi_size,
+	if (WARN_ONCE(bytes > iter->bi_size,        //bytes 不能 > iter->bi_size
 		     "Attempted to advance past end of bvec iter\n")) {
 		iter->bi_size = 0;
 		return false;
 	}
 
 	while (bytes) {
-		unsigned iter_len = bvec_iter_len(bv, *iter);
+		unsigned iter_len = bvec_iter_len(bv, *iter);       //这个是取当前bio_vec中剩余的字节数
 		unsigned len = min(bytes, iter_len);
 
-		bytes -= len;
+		bytes -= len;                                       //减去这个
 		iter->bi_size -= len;
-		iter->bi_bvec_done += len;
-
+		iter->bi_bvec_done += len;                          //加上
+        //如果==当前迭代器的->bv_len
 		if (iter->bi_bvec_done == __bvec_iter_bvec(bv, *iter)->bv_len) {
 			iter->bi_bvec_done = 0;
-			iter->bi_idx++;
+			iter->bi_idx++;                                 //index ++
 		}
 	}
 	return true;

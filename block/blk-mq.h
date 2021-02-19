@@ -18,7 +18,7 @@ struct blk_mq_ctxs {
 struct blk_mq_ctx {
 	struct {
 		spinlock_t		lock;
-		struct list_head	rq_lists[HCTX_MAX_TYPES];
+		struct list_head	rq_lists[HCTX_MAX_TYPES];       //rq_lists  有个list_head  链接request
 	} ____cacheline_aligned_in_smp;
 
 	unsigned int		cpu;
@@ -145,7 +145,9 @@ static inline struct blk_mq_ctx *__blk_mq_get_ctx(struct request_queue *q,
 {
 	return per_cpu_ptr(q->queue_ctx, cpu);
 }
-
+/*
+ * 假设每个cpu软件队列都进行了排序？他们也可以是per-node。
+ */
 /*
  * This assumes per-cpu software queueing queues. They could be per-node
  * as well, for instance. For now this is hardcoded as-is. Note that we don't
@@ -204,7 +206,7 @@ static inline bool blk_mq_get_dispatch_budget(struct blk_mq_hw_ctx *hctx)
 	struct request_queue *q = hctx->queue;
 
 	if (q->mq_ops->get_budget)
-		return q->mq_ops->get_budget(hctx);
+		return q->mq_ops->get_budget(hctx);     //会调用这个函数获取预算
 	return true;
 }
 

@@ -143,7 +143,7 @@ static inline void bio_issue_init(struct bio_issue *issue,
  * stacking drivers)
  */
 struct bio {
-	struct bio		*bi_next;	/* request queue link */
+	struct bio		*bi_next;	/* request queue link */            //下个bio
 	struct gendisk		*bi_disk;
 	unsigned int		bi_opf;		/* bottom bits req flags,
 						 * top bits REQ_OP. Use
@@ -158,18 +158,18 @@ struct bio {
 	/* Number of segments in this BIO after
 	 * physical address coalescing is performed.
 	 */
-	unsigned int		bi_phys_segments;
+	unsigned int		bi_phys_segments;       //片段数目
 
 	/*
 	 * To keep track of the max segment size, we account for the
 	 * sizes of the first and last mergeable segments in this bio.
 	 */
-	unsigned int		bi_seg_front_size;
-	unsigned int		bi_seg_back_size;
+	unsigned int		bi_seg_front_size;      //第一个可合并段的大小
+	unsigned int		bi_seg_back_size;       //最后一个可合并段的大小
 
-	struct bvec_iter	bi_iter;
+	struct bvec_iter	bi_iter;                //迭代器，并且描述了该bio目的block_index
 
-	atomic_t		__bi_remaining;
+	atomic_t		__bi_remaining;             //关联的bio数量
 	bio_end_io_t		*bi_end_io;
 
 	void			*bi_private;
@@ -188,7 +188,7 @@ struct bio {
 		struct bio_integrity_payload *bi_integrity; /* data integrity */
 #endif
 	};
-
+    //vec向量数组中的向量的个数
 	unsigned short		bi_vcnt;	/* how many bio_vec's */
 
 	/*
@@ -197,9 +197,9 @@ struct bio {
 
 	unsigned short		bi_max_vecs;	/* max bvl_vecs we can hold */
 
-	atomic_t		__bi_cnt;	/* pin count */
+	atomic_t		__bi_cnt;	/* pin count */                 //引用计数
 
-	struct bio_vec		*bi_io_vec;	/* the actual vec list */
+	struct bio_vec		*bi_io_vec;	/* the actual vec list */   //bio向量数组
 
 	struct bio_set		*bi_pool;
 
@@ -288,7 +288,7 @@ enum req_opf {
 	/* flush the volatile write cache */
 	REQ_OP_FLUSH		= 2,
 	/* discard sectors */
-	REQ_OP_DISCARD		= 3,
+	REQ_OP_DISCARD		= 3,    //请求op丢弃
 	/* securely erase sectors */
 	REQ_OP_SECURE_ERASE	= 5,
 	/* seset a zone write pointer */

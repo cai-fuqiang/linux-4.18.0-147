@@ -34,7 +34,7 @@ static int get_first_sibling(unsigned int cpu)
 int blk_mq_map_queues(struct blk_mq_queue_map *qmap)
 {
 	unsigned int *map = qmap->mq_map;
-	unsigned int nr_queues = qmap->nr_queues;
+	unsigned int nr_queues = qmap->nr_queues;       //nr_hw_queues
 	unsigned int cpu, first_sibling, q = 0;
 
 	for_each_possible_cpu(cpu)
@@ -44,13 +44,13 @@ int blk_mq_map_queues(struct blk_mq_queue_map *qmap)
 	 * Spread queues among present CPUs first for minimizing
 	 * count of dead queues which are mapped by all un-present CPUs
 	 */
-	for_each_present_cpu(cpu) {
-		if (q >= nr_queues)
+	for_each_present_cpu(cpu) {     //当前的cpu个数, 优先分配present cpu
+		if (q >= nr_queues)         //也就是cpu个数 > 硬件队列个数
 			break;
 		map[cpu] = queue_index(qmap, nr_queues, q++);
 	}
 
-	for_each_possible_cpu(cpu) {
+	for_each_possible_cpu(cpu) {    //这个是为了处理cpu个数和硬件队列个数不匹配的问题
 		if (map[cpu] != -1)
 			continue;
 		/*
@@ -59,14 +59,14 @@ int blk_mq_map_queues(struct blk_mq_queue_map *qmap)
 		 * threads per cores then map sibling threads to the same queue
 		 * for performance optimizations.
 		 */
-		if (q < nr_queues) {
-			map[cpu] = queue_index(qmap, nr_queues, q++);
-		} else {
-			first_sibling = get_first_sibling(cpu);
+		if (q < nr_queues) {    //这个是表示 cpu个数 < 硬件队列个数，硬件队列个数多了, 直接映射就完事了
+			map[cpu] = queue_index(qmap, nr_queues, q++);   //分配到possible cpu上
+		} else {                                            //这个是cpu > 硬件队列数
+			first_sibling = get_first_sibling(cpu);         //寻找同一个core下的cpu, 同一个core下的cpu
 			if (first_sibling == cpu)
 				map[cpu] = queue_index(qmap, nr_queues, q++);
 			else
-				map[cpu] = map[first_sibling];
+				map[cpu] = map[first_sibling];              //不知道搞啥
 		}
 	}
 

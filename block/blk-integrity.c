@@ -47,7 +47,6 @@ int blk_rq_count_integrity_sg(struct request_queue *q, struct bio *bio)
 	int prev = 0;
 
 	bio_for_each_integrity_vec(iv, bio, iter) {
-
 		if (prev) {
 			if (!biovec_phys_mergeable(q, &ivprv, &iv))
 				goto new_segment;

@@ -33,7 +33,7 @@ void blk_mq_sched_free_requests(struct request_queue *q);
 static inline bool
 blk_mq_sched_bio_merge(struct request_queue *q, struct bio *bio)
 {
-	if (blk_queue_nomerges(q) || !bio_mergeable(bio))
+	if (blk_queue_nomerges(q) || !bio_mergeable(bio))   //队列/该bio不支持合并
 		return false;
 
 	return __blk_mq_sched_bio_merge(q, bio);

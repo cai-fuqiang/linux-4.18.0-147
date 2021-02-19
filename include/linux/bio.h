@@ -134,14 +134,14 @@ static inline bool bio_full(struct bio *bio)
  */
 #define bio_for_each_segment_all(bvl, bio, i)				\
 	for (i = 0, bvl = (bio)->bi_io_vec; i < (bio)->bi_vcnt; i++, bvl++)
-
+//前进迭代器
 static inline void bio_advance_iter(struct bio *bio, struct bvec_iter *iter,
 				    unsigned bytes)
 {
-	iter->bi_sector += bytes >> 9;
+	iter->bi_sector += bytes >> 9;      //迭代器向后移动bytes
 
 	if (bio_no_advance_iter(bio))
-		iter->bi_size -= bytes;
+		iter->bi_size -= bytes;         //更新size
 	else
 		bvec_iter_advance(bio->bi_io_vec, iter, bytes);
 		/* TODO: It is reasonable to complete bio with error here. */
@@ -245,22 +245,22 @@ static inline void bio_get_last_bvec(struct bio *bio, struct bio_vec *bv)
 		*bv = bio_iovec(bio);
 		return;
 	}
-
-	bio_advance_iter(bio, &iter, iter.bi_size);
-
+    //这个是剩余字节数                              //也就是前进到末尾
+	bio_advance_iter(bio, &iter, iter.bi_size);     //给iter迭代器前进iter.bi_size长度
+    //上面如果前进到末尾的话, 其实是获取的last index + 1
 	if (!iter.bi_bvec_done)
-		idx = iter.bi_idx - 1;
+		idx = iter.bi_idx - 1;                      //所以在这-1
 	else	/* in the middle of bvec */
 		idx = iter.bi_idx;
 
-	*bv = bio->bi_io_vec[idx];
+	*bv = bio->bi_io_vec[idx];                      //获取最后一个bio_vec的bi_io_vec
 
-	/*
+	/* iter.bi_bvec_done 实际记录了最后一个bvec的长度 如果bio ends 在了中间的一个io vector中
 	 * iter.bi_bvec_done records actual length of the last bvec
 	 * if this bio ends in the middle of one io vector
-	 */
+	 */ //这个不知道为啥
 	if (iter.bi_bvec_done)
-		bv->bv_len = iter.bi_bvec_done;
+		bv->bv_len = iter.bi_bvec_done;             //赋值bv_len, 这个是表示数据长度
 }
 
 static inline struct bio_vec *bio_first_bvec_all(struct bio *bio)

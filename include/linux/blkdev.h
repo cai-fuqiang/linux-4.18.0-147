@@ -209,7 +209,7 @@ struct request {
 	/*
 	 * Number of scatter-gather DMA addr+len pairs after
 	 * physical address coalescing is performed.
-	 */
+	 */     //这个相当于是物理地址合并之后的segments number
 	unsigned short nr_phys_segments;
 
 #if defined(CONFIG_BLK_DEV_INTEGRITY)
@@ -237,7 +237,7 @@ struct request {
 	/*
 	 * completion callback.
 	 */
-	rq_end_io_fn *end_io;
+	rq_end_io_fn *end_io;           //这个用于complete阶段的调用
 	void *end_io_data;
 
 	/* for bidi */
@@ -316,15 +316,15 @@ enum blk_zoned_model {
 };
 
 struct queue_limits {
-	unsigned long		bounce_pfn;
+	unsigned long		bounce_pfn;             /* 这个表示最高的dma地址页框 */
 	unsigned long		seg_boundary_mask;
 	unsigned long		virt_boundary_mask;
 
-	unsigned int		max_hw_sectors;
+	unsigned int		max_hw_sectors;         /* 这个是一个硬件上的limit，反映了硬件能处理的最大大小 */
 	unsigned int		max_dev_sectors;
 	unsigned int		chunk_sectors;
-	unsigned int		max_sectors;
-	unsigned int		max_segment_size;
+	unsigned int		max_sectors;            /* 这个是一个软件上的limit, 这个是以512个字节为单位, 并且可以动态变化*/
+	unsigned int		max_segment_size;       /* 最大的物理segments大小 */
 	unsigned int		physical_block_size;
 	unsigned int		alignment_offset;
 	unsigned int		io_min;
@@ -336,8 +336,8 @@ struct queue_limits {
 	unsigned int		discard_granularity;
 	unsigned int		discard_alignment;
 
-	unsigned short		logical_block_size;
-	unsigned short		max_segments;
+	unsigned short		logical_block_size;     /* 硬件的最低扇区大小,默认为512 */
+	unsigned short		max_segments;           /* 最大segments的数目 */
 	unsigned short		max_integrity_segments;
 	unsigned short		max_discard_segments;
 
@@ -403,27 +403,27 @@ static inline int blkdev_reset_zones_ioctl(struct block_device *bdev,
 struct request_queue {
 	/*
 	 * Together with queue_head for cacheline sharing
-	 */
-	struct list_head	queue_head;
-	struct request		*last_merge;
-	struct elevator_queue	*elevator;
+truct blk_mq_ops *mq_ops; */
+	struct list_head	queue_head;             //待处理请求链表
+	struct request		*last_merge;            //指向队列中首先可能合并的request
+	struct elevator_queue	*elevator;          //指向elevator对象的指针（电梯算法）
 
 	struct blk_queue_stats	*stats;
 	struct rq_qos		*rq_qos;
 
-	make_request_fn		*make_request_fn;
+	make_request_fn		*make_request_fn;       //将一个bio组封装成一个request并添加到request_queue
 	dma_drain_needed_fn	*dma_drain_needed;
 
 	const struct blk_mq_ops	*mq_ops;
 
 	/* sw queues */
-	struct blk_mq_ctx __percpu	*queue_ctx;
-	unsigned int		nr_queues;
+	struct blk_mq_ctx __percpu	*queue_ctx;     //软队列
+	unsigned int		nr_queues;              //硬件队列的个数
 
 	unsigned int		queue_depth;
 
 	/* hw dispatch queues */
-	struct blk_mq_hw_ctx	**queue_hw_ctx;
+	struct blk_mq_hw_ctx	**queue_hw_ctx;     //维护一个CPU和队列关系之间的映射表
 	unsigned int		nr_hw_queues;
 
 	struct backing_dev_info	*backing_dev_info;
@@ -566,7 +566,7 @@ struct request_queue {
 	struct percpu_ref	q_usage_counter;
 	RH_KABI_DEPRECATE(struct list_head, all_q_node)
 
-	struct blk_mq_tag_set	*tag_set;
+	struct blk_mq_tag_set	*tag_set;                   //一个队列有一个tag_set
 	struct list_head	tag_set_list;
 	struct bio_set		bio_split;
 
@@ -1137,7 +1137,15 @@ struct request_queue *blk_alloc_queue(gfp_t);
 struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id);
 extern void blk_put_queue(struct request_queue *);
 extern void blk_set_queue_dying(struct request_queue *);
-
+/*
+ * blk_plug 允许构建一个包含一些I/O碎片(并且这些碎片只持续一小段时间)的request
+ * 他允许合并一些连续的request成一个更大的request. 必要时这些request从一个per-task
+ * 队列移动到request_queue. 这提高了可扩展性，因为对于request_queue锁的征用减少了
+ *
+ * 当添加一个request到plug list或者尝试取merge时，不禁用抢占是可以的
+ * 因为blk_schedule_flush_list将只会flush 这个plug list当task自己调用睡眠时.
+ * 细节，请查看当调用blk_schedule_flush_plug 时的schedule() 流程
+ */
 /*
  * blk_plug permits building a queue of related requests by holding the I/O
  * fragments for a short period. This allows merging of sequential requests

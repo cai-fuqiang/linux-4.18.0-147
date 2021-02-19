@@ -109,8 +109,11 @@ extern const struct cpumask *cpu_coregroup_mask(int cpu);
 #define topology_core_id(cpu)			(cpu_data(cpu).cpu_core_id)
 
 #ifdef CONFIG_SMP
-#define topology_core_cpumask(cpu)		(per_cpu(cpu_core_map, cpu))
-#define topology_sibling_cpumask(cpu)		(per_cpu(cpu_sibling_map, cpu))
+#define topology_core_cpumask(cpu)		(per_cpu(cpu_core_map, cpu))        //同属于一个cpu的core
+/*
+ * 超线程的cpu可能会共享很多资源，例如缓存
+ */
+#define topology_sibling_cpumask(cpu)		(per_cpu(cpu_sibling_map, cpu)) //同属于一个core的cpu，这里指的是超线程技术
 
 extern unsigned int __max_logical_packages;
 #define topology_max_packages()			(__max_logical_packages)

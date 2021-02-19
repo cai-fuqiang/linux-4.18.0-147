@@ -95,7 +95,9 @@ struct sbq_wait_state {
 	 */
 	wait_queue_head_t wait;
 } ____cacheline_aligned_in_smp;
-
+/*
+ * 可扩展的位图，增加了等待空闲位的附加功能
+ */
 /**
  * struct sbitmap_queue - Scalable bitmap with the added ability to wait on free
  * bits.

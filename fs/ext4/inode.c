@@ -488,11 +488,11 @@ static void ext4_map_blocks_es_recheck(handle_t *handle,
  * On success, it returns the number of blocks being mapped or allocated.  if
  * create==0 and the blocks are pre-allocated and unwritten, the resulting @map
  * is marked as unwritten. If the create == 1, it will mark @map as mapped.
- *
+ *                 基本查找
  * It returns 0 if plain look up failed (blocks have not been allocated), in
  * that case, @map is returned as unmapped but we still do fill map->m_len to
  * indicate the length of a hole starting at map->m_lblk.
- *
+ * //表示从map->m_lblk开始的空洞的长度
  * It returns the error in case of allocation failure.
  */
 int ext4_map_blocks(handle_t *handle, struct inode *inode,

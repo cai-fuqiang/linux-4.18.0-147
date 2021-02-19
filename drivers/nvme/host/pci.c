@@ -101,7 +101,7 @@ static bool __nvme_disable_io_queues(struct nvme_dev *dev, u8 opcode);
  * Represents an NVM Express device.  Each nvme_dev is a PCI function.
  */
 struct nvme_dev {
-	struct nvme_queue *queues;
+	struct nvme_queue *queues;              //admin queue + io queue
 	struct blk_mq_tag_set tagset;
 	struct blk_mq_tag_set admin_tagset;
 	u32 __iomem *dbs;
@@ -112,9 +112,9 @@ struct nvme_dev {
 	unsigned max_qid;
 	unsigned io_queues[HCTX_MAX_TYPES];
 	unsigned int num_vecs;
-	int q_depth;
+	int q_depth;                            //队列深度
 	u32 db_stride;
-	void __iomem *bar;
+	void __iomem *bar;                      //bar空间
 	unsigned long bar_mapped_size;
 	struct work_struct remove_work;
 	struct mutex shutdown_lock;
@@ -186,15 +186,15 @@ struct nvme_queue {
 	struct device *q_dmadev;
 	struct nvme_dev *dev;
 	spinlock_t sq_lock;
-	struct nvme_command *sq_cmds;
+	struct nvme_command *sq_cmds;           //submit hw queue
 	 /* only used for poll queues: */
 	spinlock_t cq_poll_lock ____cacheline_aligned_in_smp;
-	volatile struct nvme_completion *cqes;
-	struct blk_mq_tags **tags;
-	dma_addr_t sq_dma_addr;
-	dma_addr_t cq_dma_addr;
+	volatile struct nvme_completion *cqes;  //complete hw queue
+	struct blk_mq_tags **tags;              //有一个tags二级指针?
+	dma_addr_t sq_dma_addr;                 //sq dma address
+	dma_addr_t cq_dma_addr;                 //cq dma address
 	u32 __iomem *q_db;
-	u16 q_depth;
+	u16 q_depth;                            //队列深度
 	s16 cq_vector;
 	u16 sq_tail;
 	u16 last_sq_tail;
@@ -471,9 +471,9 @@ static int nvme_init_request(struct blk_mq_tag_set *set, struct request *req,
 	struct nvme_queue *nvmeq = &dev->queues[queue_idx];
 
 	BUG_ON(!nvmeq);
-	iod->nvmeq = nvmeq;
+	iod->nvmeq = nvmeq;                             //赋值nvmeq
 
-	nvme_req(req)->ctrl = &dev->ctrl;
+	nvme_req(req)->ctrl = &dev->ctrl;               //赋值ctrl
 	return 0;
 }
 
@@ -495,7 +495,7 @@ static int nvme_pci_map_queues(struct blk_mq_tag_set *set)
 	for (i = 0, qoff = 0; i < set->nr_maps; i++) {
 		struct blk_mq_queue_map *map = &set->map[i];
 
-		map->nr_queues = dev->io_queues[i];
+		map->nr_queues = dev->io_queues[i];     //赋值
 		if (!map->nr_queues) {
 			BUG_ON(i == HCTX_TYPE_DEFAULT);
 			continue;
@@ -921,7 +921,7 @@ static blk_status_t nvme_queue_rq(struct blk_mq_hw_ctx *hctx,
 	struct nvme_queue *nvmeq = hctx->driver_data;
 	struct nvme_dev *dev = nvmeq->dev;
 	struct request *req = bd->rq;
-	struct nvme_command cmnd;
+	struct nvme_command cmnd;       //所需要format的cmnd
 	blk_status_t ret;
 
 	/*
@@ -946,7 +946,7 @@ static blk_status_t nvme_queue_rq(struct blk_mq_hw_ctx *hctx,
 	}
 
 	blk_mq_start_request(req);
-	nvme_submit_cmd(nvmeq, &cmnd, bd->last);
+	nvme_submit_cmd(nvmeq, &cmnd, bd->last);    //下发命令
 	return BLK_STS_OK;
 out_cleanup_iod:
 	nvme_free_iod(dev, req);
@@ -1004,7 +1004,7 @@ static inline void nvme_handle_cqe(struct nvme_queue *nvmeq, u16 idx)
 		return;
 	}
 
-	req = blk_mq_tag_to_rq(*nvmeq->tags, cqe->command_id);
+	req = blk_mq_tag_to_rq(*nvmeq->tags, cqe->command_id);      //取第一个?
 	trace_nvme_sq(req, cqe->sq_head, nvmeq->sq_tail);
 	nvme_end_request(req, cqe->status, cqe->result);
 }
@@ -1151,7 +1151,7 @@ static int adapter_delete_queue(struct nvme_dev *dev, u8 opcode, u16 id)
 static int adapter_alloc_cq(struct nvme_dev *dev, u16 qid,
 		struct nvme_queue *nvmeq, s16 vector)
 {
-	struct nvme_command c;
+	struct nvme_command c;                  //nvme cmd
 	int flags = NVME_QUEUE_PHYS_CONTIG;
 
 	if (vector != -1)
@@ -1162,8 +1162,8 @@ static int adapter_alloc_cq(struct nvme_dev *dev, u16 qid,
 	 * is attached to the request.
 	 */
 	memset(&c, 0, sizeof(c));
-	c.create_cq.opcode = nvme_admin_create_cq;
-	c.create_cq.prp1 = cpu_to_le64(nvmeq->cq_dma_addr);
+	c.create_cq.opcode = nvme_admin_create_cq;                  //create cq命令
+	c.create_cq.prp1 = cpu_to_le64(nvmeq->cq_dma_addr);         //赋值dma地址
 	c.create_cq.cqid = cpu_to_le16(qid);
 	c.create_cq.qsize = cpu_to_le16(nvmeq->q_depth - 1);
 	c.create_cq.cq_flags = cpu_to_le16(flags);
@@ -1172,7 +1172,7 @@ static int adapter_alloc_cq(struct nvme_dev *dev, u16 qid,
 	else
 		c.create_cq.irq_vector = 0;
 
-	return nvme_submit_sync_cmd(dev->ctrl.admin_q, &c, NULL, 0);
+	return nvme_submit_sync_cmd(dev->ctrl.admin_q, &c, NULL, 0);    //提交命令
 }
 
 static int adapter_alloc_sq(struct nvme_dev *dev, u16 qid,
@@ -1406,7 +1406,7 @@ static void nvme_free_queues(struct nvme_dev *dev, int lowest)
  * @nvmeq: queue to suspend
  */
 static int nvme_suspend_queue(struct nvme_queue *nvmeq)
-{
+{   //将队列挂起
 	if (!test_and_clear_bit(NVMEQ_ENABLED, &nvmeq->flags))
 		return 1;
 
@@ -1496,7 +1496,7 @@ static int nvme_alloc_queue(struct nvme_dev *dev, int qid, int depth)
 	if (dev->ctrl.queue_count > qid)
 		return 0;
 
-	nvmeq->cqes = dma_zalloc_coherent(dev->dev, CQ_SIZE(depth),
+	nvmeq->cqes = dma_zalloc_coherent(dev->dev, CQ_SIZE(depth),     //申请complete队列内存空间
 					  &nvmeq->cq_dma_addr, GFP_KERNEL);
 	if (!nvmeq->cqes)
 		goto free_nvmeq;
@@ -1508,8 +1508,8 @@ static int nvme_alloc_queue(struct nvme_dev *dev, int qid, int depth)
 	nvmeq->dev = dev;
 	spin_lock_init(&nvmeq->sq_lock);
 	spin_lock_init(&nvmeq->cq_poll_lock);
-	nvmeq->cq_head = 0;
-	nvmeq->cq_phase = 1;
+	nvmeq->cq_head = 0;                                 //重新定义cq_head
+	nvmeq->cq_phase = 1;                                //重新赋值cq_phase
 	nvmeq->q_db = &dev->dbs[qid * 2 * dev->db_stride];
 	nvmeq->q_depth = depth;
 	nvmeq->qid = qid;
@@ -1750,7 +1750,7 @@ static int nvme_create_io_queues(struct nvme_dev *dev)
 	int ret = 0;
 
 	for (i = dev->ctrl.queue_count; i <= dev->max_qid; i++) {
-		if (nvme_alloc_queue(dev, i, dev->q_depth)) {
+		if (nvme_alloc_queue(dev, i, dev->q_depth)) {       //申请队列
 			ret = -ENOMEM;
 			break;
 		}
@@ -2124,7 +2124,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 	unsigned long size;
 
 	nr_io_queues = max_io_queues();
-	result = nvme_set_queue_count(&dev->ctrl, &nr_io_queues);
+	result = nvme_set_queue_count(&dev->ctrl, &nr_io_queues);   //根据硬件特性设置下io queue
 	if (result < 0)
 		return result;
 
@@ -2134,7 +2134,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 	clear_bit(NVMEQ_ENABLED, &adminq->flags);
 
 	if (dev->cmb_use_sqes) {
-		result = nvme_cmb_qdepth(dev, nr_io_queues,
+		result = nvme_cmb_qdepth(dev, nr_io_queues,             //获取队列深度
 				sizeof(struct nvme_command));
 		if (result > 0)
 			dev->q_depth = result;
@@ -2144,7 +2144,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 
 	do {
 		size = db_bar_size(dev, nr_io_queues);
-		result = nvme_remap_bar(dev, size);
+		result = nvme_remap_bar(dev, size);                     //重新映射bar空间
 		if (!result)
 			break;
 		if (!--nr_io_queues)
@@ -2154,7 +2154,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 
  retry:
 	/* Deregister the admin queue's interrupt */
-	pci_free_irq(pdev, 0, adminq);
+	pci_free_irq(pdev, 0, adminq);                              //重新注册irq
 
 	/*
 	 * If we enable msix early due to not intx, disable it again before
@@ -2183,7 +2183,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 	}
 	set_bit(NVMEQ_ENABLED, &adminq->flags);
 
-	result = nvme_create_io_queues(dev);
+	result = nvme_create_io_queues(dev);                        //创建io queue
 	if (result || dev->online_queues < 2)
 		return result;
 
@@ -2284,14 +2284,14 @@ static int nvme_dev_add(struct nvme_dev *dev)
 
 	if (!dev->ctrl.tagset) {
 		dev->tagset.ops = &nvme_mq_ops;
-		dev->tagset.nr_hw_queues = dev->online_queues - 1;
-		dev->tagset.nr_maps = 2; /* default + read */
+		dev->tagset.nr_hw_queues = dev->online_queues - 1;      //赋值了硬件队列个数, -1(减去admin队列)
+		dev->tagset.nr_maps = 2; /* default + read */           //这个数是2
 		if (dev->io_queues[HCTX_TYPE_POLL])
 			dev->tagset.nr_maps++;
 		dev->tagset.timeout = NVME_IO_TIMEOUT;
 		dev->tagset.numa_node = dev_to_node(dev->dev);
 		dev->tagset.queue_depth =
-				min_t(int, dev->q_depth, BLK_MQ_MAX_DEPTH) - 1;
+				min_t(int, dev->q_depth, BLK_MQ_MAX_DEPTH) - 1; //赋值了队列深度
 		dev->tagset.cmd_size = nvme_pci_cmd_size(dev, false);
 		if ((dev->ctrl.sgls & ((1 << 0) | (1 << 1))) && sgl_threshold) {
 			dev->tagset.cmd_size = max(dev->tagset.cmd_size,
@@ -2576,7 +2576,7 @@ static void nvme_reset_work(struct work_struct *work)
 			goto out;
 	}
 
-	result = nvme_setup_io_queues(dev);
+	result = nvme_setup_io_queues(dev);     //处理和io队列相关的东西
 	if (result)
 		goto out;
 
@@ -2584,7 +2584,7 @@ static void nvme_reset_work(struct work_struct *work)
 	 * Keep the controller around but remove all namespaces if we don't have
 	 * any working I/O queue.
 	 */
-	if (dev->online_queues < 2) {
+	if (dev->online_queues < 2) {           //只有admin队列
 		dev_warn(dev->ctrl.device, "IO queues not created\n");
 		nvme_kill_queues(&dev->ctrl);
 		nvme_remove_namespaces(&dev->ctrl);
@@ -2737,7 +2737,7 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return -ENOMEM;
 
 	dev->queues = kcalloc_node(max_queue_count(), sizeof(struct nvme_queue),
-					GFP_KERNEL, node);
+					GFP_KERNEL, node);      //创建队列
 	if (!dev->queues)
 		goto free;
 
@@ -2783,7 +2783,7 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	dev_info(dev->ctrl.device, "pci function %s\n", dev_name(&pdev->dev));
 
 	nvme_get_ctrl(&dev->ctrl);
-	async_schedule(nvme_async_probe, dev);
+	async_schedule(nvme_async_probe, dev);      //执行任务
 
 	return 0;
 

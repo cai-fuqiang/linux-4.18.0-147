@@ -7,17 +7,26 @@
 /*
  * Tag address space map.
  */
+/*
+ * 描述tag和request的集合
+ * 在多队列的情况下，每个request请求都包含一个tag number, 
+ * 这个tag number 会随着请求传递到硬件，再随着请求完成，
+ * 通知传递回来
+ */
 struct blk_mq_tags {
-	unsigned int nr_tags;
-	unsigned int nr_reserved_tags;
+	unsigned int nr_tags;                   //tags最大数量, 一般来说要等于最大队列深度
+	unsigned int nr_reserved_tags;          //保留tags数量
 
-	atomic_t active_queues;
+	atomic_t active_queues;                 //活跃队列数量
 
-	struct sbitmap_queue bitmap_tags;
+	struct sbitmap_queue bitmap_tags;       //保留tag的位图，如果使用了，相应的bit为1
 	struct sbitmap_queue breserved_tags;
 
-	struct request **rqs;
-	struct request **static_rqs;
+    //分配staic_rqs时，会分配多个连续的pages, 
+    //将pages分为多个如下大小，当需要request时，
+    //就从这里面分配，类似slab
+	struct request **rqs;                   //这个应该是预分配的rqs
+	struct request **static_rqs;            
 	struct list_head page_list;
 };
 

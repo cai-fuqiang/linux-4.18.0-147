@@ -11,7 +11,11 @@
 #include <trace/events/block.h>
 
 #include "blk.h"
-
+/*
+ * 检查从两个bvecs(分别来自不同的bios)是否可以合并成一个段.
+ * 如果可以，无需检查两个BIOS之间的间隙，因为第一个bio和第
+ * 二个Bio中的第一个Bvec可以在一个段中处理。 
+ */
 /*
  * Check if the two bvecs from two bios can be merged to one segment.  If yes,
  * no need to check gap between the two bios since the 1st bio and the 1st bvec
@@ -23,18 +27,18 @@ static inline bool bios_segs_mergeable(struct request_queue *q,
 {
 	if (!biovec_phys_mergeable(q, prev_last_bv, next_first_bv))
 		return false;
-	if (prev->bi_seg_back_size + next_first_bv->bv_len >
+	if (prev->bi_seg_back_size + next_first_bv->bv_len >        //不能超过一个bio的范围
 			queue_max_segment_size(q))
 		return false;
 	return true;
 }
-
+//这个函数去判断如果合并，两个bio合并成的一个bio在物理地址上是否存在间隙
 static inline bool bio_will_gap(struct request_queue *q,
 		struct request *prev_rq, struct bio *prev, struct bio *next)
 {
 	struct bio_vec pb, nb;
 
-	if (!bio_has_data(prev) || !queue_virt_boundary(q))
+	if (!bio_has_data(prev) || !queue_virt_boundary(q))     //之后 在看这个
 		return false;
 
 	/*
@@ -46,8 +50,8 @@ static inline bool bio_will_gap(struct request_queue *q,
 		bio_get_first_bvec(prev_rq->bio, &pb);
 	else
 		bio_get_first_bvec(prev, &pb);
-	if (pb.bv_offset & queue_virt_boundary(q))
-		return true;
+	if (pb.bv_offset & queue_virt_boundary(q))              //!!!!按照virt_boundary_mask对齐, 回头在理解下这块
+		return true;                                        //返回true实际上是不merge
 
 	/*
 	 * We don't need to worry about the situation that the merged segment
@@ -58,8 +62,8 @@ static inline bool bio_will_gap(struct request_queue *q,
 	 *   one single bvec of 'nb', otherwise the 'nb' can't
 	 *   merge with 'pb'
 	 */
-	bio_get_last_bvec(prev, &pb);
-	bio_get_first_bvec(next, &nb);
+	bio_get_last_bvec(prev, &pb);                           //获取prev->last bvec
+	bio_get_first_bvec(next, &nb);                          //获取next->first bvec
 	if (bios_segs_mergeable(q, prev, &pb, &nb))
 		return false;
 	return __bvec_gap_to_prev(q, &pb, nb.bv_offset);
@@ -156,7 +160,7 @@ static inline unsigned get_max_io_size(struct request_queue *q,
 	unsigned mask = queue_logical_block_size(q) - 1;
 
 	/* aligned to logical block size */
-	sectors &= ~(mask >> 9);
+	sectors &= ~(mask >> 9);        //按照它对齐
 
 	return sectors;
 }
@@ -175,14 +179,14 @@ static struct bio *blk_bio_segment_split(struct request_queue *q,
 	const unsigned max_sectors = get_max_io_size(q, bio);
 
 	bio_for_each_segment(bv, bio, iter) {
-		/*
+		/* 这个是说不允许有空隙
 		 * If the queue doesn't support SG gaps and adding this
 		 * offset would create a gap, disallow it.
 		 */
 		if (bvprvp && bvec_gap_to_prev(q, bvprvp, bv.bv_offset))
 			goto split;
 
-		if (sectors + (bv.bv_len >> 9) > max_sectors) {
+		if (sectors + (bv.bv_len >> 9) > max_sectors) {         //如果大于的话
 			/*
 			 * Consider this a new segment if we're splitting in
 			 * the middle of this vector.
@@ -196,9 +200,9 @@ static struct bio *blk_bio_segment_split(struct request_queue *q,
 		}
 
 		if (bvprvp && blk_queue_cluster(q)) {
-			if (seg_size + bv.bv_len > queue_max_segment_size(q))
+			if (seg_size + bv.bv_len > queue_max_segment_size(q))   //大于max_segment_size
 				goto new_segment;
-			if (!biovec_phys_mergeable(q, bvprvp, &bv))
+			if (!biovec_phys_mergeable(q, bvprvp, &bv))             //判断他可不可以成为一个新段
 				goto new_segment;
 
 			seg_size += bv.bv_len;
@@ -209,7 +213,7 @@ static struct bio *blk_bio_segment_split(struct request_queue *q,
 			continue;
 		}
 new_segment:
-		if (nsegs == queue_max_segments(q))
+		if (nsegs == queue_max_segments(q)) //判断是否大于最大的段数
 			goto split;
 
 		if (nsegs == 1 && seg_size > front_seg_size)
@@ -220,15 +224,14 @@ new_segment:
 		bvprvp = &bvprv;
 		seg_size = bv.bv_len;
 		sectors += bv.bv_len >> 9;
-
 	}
 
 	do_split = false;
 split:
-	*segs = nsegs;
+	*segs = nsegs;      //第几层
 
 	if (do_split) {
-		new = bio_split(bio, sectors, GFP_NOIO, bs);
+		new = bio_split(bio, sectors, GFP_NOIO, bs);        //按照sector进行切割?
 		if (new)
 			bio = new;
 	}
@@ -265,7 +268,7 @@ void blk_queue_split(struct request_queue *q, struct bio **bio)
 
 	/* physical segments can be figured out during splitting */
 	res = split ? split : *bio;
-	res->bi_phys_segments = nsegs;
+	res->bi_phys_segments = nsegs;      //片段数
 	bio_set_flag(res, BIO_SEG_VALID);
 
 	if (split) {
@@ -284,8 +287,8 @@ void blk_queue_split(struct request_queue *q, struct bio **bio)
 
 		bio_chain(split, *bio);
 		trace_block_split(q, split, (*bio)->bi_iter.bi_sector);
-		generic_make_request(*bio);
-		*bio = split;
+		generic_make_request(*bio);         //相当于进行了递归调度
+		*bio = split;                       //分离出来的split实际上相当于
 	}
 }
 EXPORT_SYMBOL(blk_queue_split);
@@ -315,21 +318,21 @@ static unsigned int __blk_recalc_rq_segments(struct request_queue *q,
 	cluster = blk_queue_cluster(q);
 	seg_size = 0;
 	nr_phys_segs = 0;
-	for_each_bio(bio) {
+	for_each_bio(bio) {                                         //遍历bio
 		bio_for_each_segment(bv, bio, iter) {
-			if (prev && cluster) {
+			if (prev && cluster) {                              //必须开启了这个才支持
 				if (seg_size + bv.bv_len
-				    > queue_max_segment_size(q))
+				    > queue_max_segment_size(q))                //超过了segment_size
 					goto new_segment;
-				if (!biovec_phys_mergeable(q, &bvprv, &bv))
+				if (!biovec_phys_mergeable(q, &bvprv, &bv))     //不可以合并
 					goto new_segment;
 
-				seg_size += bv.bv_len;
+				seg_size += bv.bv_len;                          //这里实际上就把seg_size加上了
 				bvprv = bv;
 				continue;
 			}
 new_segment:
-			if (nr_phys_segs == 1 && seg_size >
+			if (nr_phys_segs == 1 && seg_size >                 //首个bio->bi_io_vec
 			    fbio->bi_seg_front_size)
 				fbio->bi_seg_front_size = seg_size;
 
@@ -344,7 +347,7 @@ new_segment:
 	if (nr_phys_segs == 1 && seg_size > fbio->bi_seg_front_size)
 		fbio->bi_seg_front_size = seg_size;
 	if (seg_size > bbio->bi_seg_back_size)
-		bbio->bi_seg_back_size = seg_size;
+		bbio->bi_seg_back_size = seg_size;                      //最后一个可合并段的大小
 
 	return nr_phys_segs;
 }
@@ -443,7 +446,7 @@ static int __blk_bios_map_sg(struct request_queue *q, struct bio *bio,
 	struct bvec_iter iter;
 	int cluster = blk_queue_cluster(q), nsegs = 0;
 
-	for_each_bio(bio)
+	for_each_bio(bio)       //循环遍历bio
 		bio_for_each_segment(bvec, bio, iter)
 			__blk_segment_map_sg(q, &bvec, sglist, &bvprv, sg,
 					     &nsegs, &cluster);
@@ -451,7 +454,8 @@ static int __blk_bios_map_sg(struct request_queue *q, struct bio *bio,
 	return nsegs;
 }
 
-/*
+/* map一个request 到 scatterlist, 这个函数会折叠物理上的段（collapsing physically contiguous segments)
+ * 但是前提是QUEUE_FLAG_CLUSTER is set
  * map a request to scatterlist, return number of sg entries setup. Caller
  * must make sure sg can hold rq->nr_phys_segments entries
  */
@@ -531,20 +535,20 @@ no_merge:
 int ll_back_merge_fn(struct request_queue *q, struct request *req,
 		     struct bio *bio)
 {
-	if (req_gap_back_merge(req, bio))
+	if (req_gap_back_merge(req, bio))               //这个是判断是否有间隙,以及一些对齐检查
 		return 0;
-	if (blk_integrity_rq(req) &&
-	    integrity_req_gap_back_merge(req, bio))
+	if (blk_integrity_rq(req) &&                    //完整性检查
+	    integrity_req_gap_back_merge(req, bio))     //
 		return 0;
 	if (blk_rq_sectors(req) + bio_sectors(bio) >
 	    blk_rq_get_max_sectors(req, blk_rq_pos(req))) {
-		req_set_nomerge(q, req);
+		req_set_nomerge(q, req);                    //这只这个队列不要merge了
 		return 0;
 	}
 	if (!bio_flagged(req->biotail, BIO_SEG_VALID))
 		blk_recount_segments(q, req->biotail);
-	if (!bio_flagged(bio, BIO_SEG_VALID))
-		blk_recount_segments(q, bio);
+	if (!bio_flagged(bio, BIO_SEG_VALID))           //需不需要重新计算
+		blk_recount_segments(q, bio);               //重新计算
 
 	return ll_new_hw_segment(q, req, bio);
 }
@@ -827,10 +831,10 @@ int blk_attempt_req_merge(struct request_queue *q, struct request *rq,
 
 bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 {
-	if (!rq_mergeable(rq) || !bio_mergeable(bio))
+	if (!rq_mergeable(rq) || !bio_mergeable(bio))   //检查是否允许merge
 		return false;
 
-	if (req_op(rq) != bio_op(bio))
+	if (req_op(rq) != bio_op(bio))                  //req_op 必须等于bio_op
 		return false;
 
 	/* different data direction or already started, don't merge */
@@ -840,7 +844,7 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 	/* must be same device */
 	if (rq->rq_disk != bio->bi_disk)
 		return false;
-
+    //只合并完整性保护bio到同上rq
 	/* only merge integrity protected bio into ditto rq */
 	if (blk_integrity_merge_bio(rq->q, rq, bio) == false)
 		return false;
@@ -866,10 +870,10 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 enum elv_merge blk_try_merge(struct request *rq, struct bio *bio)
 {
 	if (blk_discard_mergable(rq))
-		return ELEVATOR_DISCARD_MERGE;
-	else if (blk_rq_pos(rq) + blk_rq_sectors(rq) == bio->bi_iter.bi_sector)
+		return ELEVATOR_DISCARD_MERGE;      //512为单位
+	else if (blk_rq_pos(rq) + blk_rq_sectors(rq) == bio->bi_iter.bi_sector) //请求的最后一个扇区和bio的起始扇区一致，向后合并
 		return ELEVATOR_BACK_MERGE;
-	else if (blk_rq_pos(rq) - bio_sectors(bio) == bio->bi_iter.bi_sector)
+	else if (blk_rq_pos(rq) - bio_sectors(bio) == bio->bi_iter.bi_sector)   //bio的最后一个扇区和请求的起始扇区一致，向前合并
 		return ELEVATOR_FRONT_MERGE;
 	return ELEVATOR_NO_MERGE;
 }

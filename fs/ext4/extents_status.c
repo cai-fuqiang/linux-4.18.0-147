@@ -901,7 +901,7 @@ void ext4_es_cache_extent(struct inode *inode, ext4_lblk_t lblk,
 int ext4_es_lookup_extent(struct inode *inode, ext4_lblk_t lblk,
 			  struct extent_status *es)
 {
-	struct ext4_es_tree *tree;
+	struct ext4_es_tree *tree;          //区段树
 	struct ext4_es_stats *stats;
 	struct extent_status *es1 = NULL;
 	struct rb_node *node;

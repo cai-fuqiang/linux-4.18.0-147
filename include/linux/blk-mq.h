@@ -15,7 +15,7 @@ struct blk_flush_queue;
 struct blk_mq_hw_ctx {
 	struct {
 		spinlock_t		lock;
-		struct list_head	dispatch;
+		struct list_head	dispatch;   //这个队列用于存储要派发的请求
 		unsigned long		state;		/* BLK_MQ_S_* flags */
 	} ____cacheline_aligned_in_smp;
 
@@ -30,22 +30,22 @@ struct blk_mq_hw_ctx {
 	struct request_queue	*queue;
 	struct blk_flush_queue	*fq;
 
-	void			*driver_data;
+	void			*driver_data;       //驱动的私有数据，对应的nvme 的为nvme_queue
 
-	struct sbitmap		ctx_map;
+	struct sbitmap		ctx_map;        //bitmap 用于维护ctxs[]的数组，表示ctx在当前hctx中是否是pengding状态
 
 	struct blk_mq_ctx	*dispatch_from;
 	unsigned int		dispatch_busy;
 
 	unsigned short		type;
 	unsigned short		nr_ctx;
-	struct blk_mq_ctx	**ctxs;
+	struct blk_mq_ctx	**ctxs;     //软件队列   长度为CPUS
 
 	spinlock_t		dispatch_wait_lock;
 	wait_queue_entry_t	dispatch_wait;
 	atomic_t		wait_index;
 
-	struct blk_mq_tags	*tags;
+	struct blk_mq_tags	*tags;      //tags
 	struct blk_mq_tags	*sched_tags;
 
 	unsigned long		queued;
@@ -54,7 +54,7 @@ struct blk_mq_hw_ctx {
 	unsigned long		dispatched[BLK_MQ_MAX_DISPATCH_ORDER];
 
 	unsigned int		numa_node;
-	unsigned int		queue_num;
+	unsigned int		queue_num;                      //队列id
 
 	atomic_t		nr_active;
 	RH_KABI_DEPRECATE(unsigned int,	nr_expired)
@@ -103,26 +103,28 @@ enum hctx_type {
 	RH_HCTX_MAX_TYPES = 6,	/* RH extend for reserving space*/
 };
 
-struct blk_mq_tag_set {
+struct blk_mq_tag_set {         //用于描述存储器件的tag集合
 	/*
 	 * map[] holds ctx -> hctx mappings, one map exists for each type
 	 * that the driver wishes to support. There are no restrictions
 	 * on maps being of the same size, and it's perfectly legal to
 	 * share maps between types.
 	 */
-	struct blk_mq_queue_map	map[RH_HCTX_MAX_TYPES];
-	unsigned int		nr_maps;	/* nr entries in map[] */
-	const struct blk_mq_ops	*ops;
-	unsigned int		nr_hw_queues;	/* nr hw queues across maps */
-	unsigned int		queue_depth;	/* max hw supported */
-	unsigned int		reserved_tags;
-	unsigned int		cmd_size;	/* per-request extra data */
-	int			numa_node;
-	unsigned int		timeout;
+    //软件队列(ctx)到硬件队列(hctx)的映射表, blk-mq中将一个或多个软件队列映射到
+    //一个硬件队列，一个器件可以支持多种类型的硬件队列
+	struct blk_mq_queue_map	map[RH_HCTX_MAX_TYPES];                 
+	unsigned int		nr_maps;	/* nr entries in map[] */       //映射表的数量
+	const struct blk_mq_ops	*ops;                                   //块设备驱动mq操作集合
+	unsigned int		nr_hw_queues;	/* nr hw queues across maps */  //硬件队列数量
+	unsigned int		queue_depth;	/* max hw supported */          //队列深度
+	unsigned int		reserved_tags;                              //块设备保留的tag数量
+	unsigned int		cmd_size;	/* per-request extra data */    //为每个request分配的额外空间大小
+	int			numa_node;                                          //numa节点，分配request内存的时候，会使用
+	unsigned int		timeout;                        //请求处理的超时时间，单位是jiffies
 	unsigned int		flags;		/* BLK_MQ_F_* */
-	void			*driver_data;
+	void			*driver_data;                       //块设备驱动的私有数据
 
-	struct blk_mq_tags	**tags;
+	struct blk_mq_tags	**tags;                         //块设备的mq_tag数组
 
 	struct mutex		tag_list_lock;
 	struct list_head	tag_list;

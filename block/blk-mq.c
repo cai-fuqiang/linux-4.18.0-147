@@ -64,9 +64,9 @@ static int blk_mq_poll_stats_bkt(const struct request *rq)
  */
 static bool blk_mq_hctx_has_pending(struct blk_mq_hw_ctx *hctx)
 {
-	return !list_empty_careful(&hctx->dispatch) ||
-		sbitmap_any_bit_set(&hctx->ctx_map) ||
-			blk_mq_sched_has_work(hctx);
+	return !list_empty_careful(&hctx->dispatch) ||  // 队列不是空
+		sbitmap_any_bit_set(&hctx->ctx_map) ||      // 有任意一个软件队列pending
+			blk_mq_sched_has_work(hctx);            // has_work
 }
 
 /*
@@ -293,7 +293,7 @@ static struct request *blk_mq_rq_ctx_init(struct blk_mq_alloc_data *data,
 		unsigned int tag, unsigned int op)
 {
 	struct blk_mq_tags *tags = blk_mq_tags_from_data(data);
-	struct request *rq = tags->static_rqs[tag];
+	struct request *rq = tags->static_rqs[tag];         //tags -> static_rqs  在这取得tags->static_rqs
 	req_flags_t rq_flags = 0;
 
 	if (data->flags & BLK_MQ_REQ_INTERNAL) {
@@ -361,16 +361,18 @@ static struct request *blk_mq_get_request(struct request_queue *q,
 	blk_queue_enter_live(q);
 	data->q = q;
 	if (likely(!data->ctx)) {
+        //返回的是当前current的cpu -->ctx
 		data->ctx = blk_mq_get_ctx(q);
 		clear_ctx_on_error = true;
 	}
 	if (likely(!data->hctx))
+        //获得一个硬件队列
 		data->hctx = blk_mq_map_queue(q, data->cmd_flags,
 						data->ctx);
 	if (data->cmd_flags & REQ_NOWAIT)
 		data->flags |= BLK_MQ_REQ_NOWAIT;
 
-	if (e) {
+	if (e) {            //实现电梯调度的结构
 		data->flags |= BLK_MQ_REQ_INTERNAL;
 
 		/*
@@ -386,7 +388,7 @@ static struct request *blk_mq_get_request(struct request_queue *q,
 		blk_mq_tag_busy(data->hctx);
 	}
 
-	tag = blk_mq_get_tag(data);
+	tag = blk_mq_get_tag(data);         //这个tag是一个tag号
 	if (tag == BLK_MQ_TAG_FAIL) {
 		if (clear_ctx_on_error)
 			data->ctx = NULL;
@@ -764,7 +766,7 @@ static void blk_mq_requeue_work(struct work_struct *work)
 		blk_mq_sched_insert_request(rq, false, false, false);
 	}
 
-	blk_mq_run_hw_queues(q, false);
+	blk_mq_run_hw_queues(q, false); 
 }
 
 void blk_mq_add_to_requeue_list(struct request *rq, bool at_head,
@@ -1052,20 +1054,20 @@ bool blk_mq_get_driver_tag(struct request *rq)
 	};
 	bool shared;
 
-	if (rq->tag != -1)
+	if (rq->tag != -1)          //tag != -1 直接goto done
 		goto done;
 
 	if (blk_mq_tag_is_reserved(data.hctx->sched_tags, rq->internal_tag))
 		data.flags |= BLK_MQ_REQ_RESERVED;
 
 	shared = blk_mq_tag_busy(data.hctx);
-	rq->tag = blk_mq_get_tag(&data);
+	rq->tag = blk_mq_get_tag(&data);        //重新分配tag
 	if (rq->tag >= 0) {
 		if (shared) {
 			rq->rq_flags |= RQF_MQ_INFLIGHT;
 			atomic_inc(&data.hctx->nr_active);
 		}
-		data.hctx->tags->rqs[rq->tag] = rq;
+		data.hctx->tags->rqs[rq->tag] = rq; //重新赋值了硬件队列的tags->rqs[tag]
 	}
 
 done:
@@ -1215,17 +1217,17 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 	 * Now process all the entries, sending them to the driver.
 	 */
 	errors = queued = 0;
-	do {
+	do {                             //遍历这个list
 		struct blk_mq_queue_data bd;
 
 		rq = list_first_entry(list, struct request, queuelist);
 
 		hctx = rq->mq_hctx;
 		if (!got_budget && !blk_mq_get_dispatch_budget(hctx))
-			break;
+			break;                  //没有获取到预算直接break
 
 		if (!blk_mq_get_driver_tag(rq)) {
-			/*
+			/*  //分配失败了
 			 * The initial allocation attempt failed, so we need to
 			 * rerun the hardware queue when a tag is freed. The
 			 * waitqueue takes care of that. If the queue is run
@@ -1259,7 +1261,7 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 			bd.last = !blk_mq_get_driver_tag(nxt);
 		}
 
-		ret = q->mq_ops->queue_rq(hctx, &bd);
+		ret = q->mq_ops->queue_rq(hctx, &bd);       //派发给驱动程序
 		if (ret == BLK_STS_RESOURCE || ret == BLK_STS_DEV_RESOURCE) {
 			/*
 			 * If an I/O scheduler has been configured and we got a
@@ -1285,7 +1287,7 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 	} while (!list_empty(list));
 
 	hctx->dispatched[queued_to_index(queued)]++;
-
+    // 将他们塞入到hctx->dispatch中, 他们将在下一个队列运行时继续被调度
 	/*
 	 * Any items that need requeuing? Stuff them into hctx->dispatch,
 	 * that is where we will continue on next queue run.
@@ -1297,12 +1299,12 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 		 * If we didn't flush the entire list, we could have told
 		 * the driver there was more coming, but that turned out to
 		 * be a lie.
-		 */
+		 */     //告诉驱动可能会有更多的请求来?
 		if (q->mq_ops->commit_rqs)
 			q->mq_ops->commit_rqs(hctx);
 
 		spin_lock(&hctx->lock);
-		list_splice_init(list, &hctx->dispatch);
+		list_splice_init(list, &hctx->dispatch);        //放入dispatch
 		spin_unlock(&hctx->lock);
 
 		/*
@@ -1336,7 +1338,7 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 		else if (needs_restart && (ret == BLK_STS_RESOURCE))
 			blk_mq_delay_run_hw_queue(hctx, BLK_MQ_RESOURCE_DELAY);
 
-		blk_mq_update_dispatch_busy(hctx, true);
+		blk_mq_update_dispatch_busy(hctx, true);        //将队列设置成busy
 		return false;
 	} else
 		blk_mq_update_dispatch_busy(hctx, false);
@@ -1479,7 +1481,11 @@ bool blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx, bool async)
 {
 	int srcu_idx;
 	bool need_run;
-
+    /*
+     * 当队列是不活跃的状态，我们应该执行io scheduler , 或者是更新
+     * nr_hw_queues, 或者其他事请，并且我们不应该去执行队列中任何东西
+     * 甚至 __blk_mq_hctx_has_pending调用不安全
+     */
 	/*
 	 * When queue is quiesced, we may be switching io scheduler, or
 	 * updating nr_hw_queues, or other things, and we can't run queue
@@ -1489,7 +1495,7 @@ bool blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx, bool async)
 	 * quiesced.
 	 */
 	hctx_lock(hctx, &srcu_idx);
-	need_run = !blk_queue_quiesced(hctx->queue) &&
+	need_run = !blk_queue_quiesced(hctx->queue) &&      //队列已经停顿
 		blk_mq_hctx_has_pending(hctx);
 	hctx_unlock(hctx, srcu_idx);
 
@@ -1687,7 +1693,7 @@ void blk_mq_insert_requests(struct blk_mq_hw_ctx *hctx, struct blk_mq_ctx *ctx,
 
 	spin_lock(&ctx->lock);
 	list_splice_tail_init(list, &ctx->rq_lists[type]);
-	blk_mq_hctx_mark_pending(hctx, ctx);
+	blk_mq_hctx_mark_pending(hctx, ctx);            //标记该硬件队列中的软件队列被
 	spin_unlock(&ctx->lock);
 }
 
@@ -1718,7 +1724,7 @@ void blk_mq_flush_plug_list(struct blk_plug *plug, bool from_schedule)
 	LIST_HEAD(rq_list);
 	unsigned int depth;
 
-	list_splice_init(&plug->mq_list, &list);
+	list_splice_init(&plug->mq_list, &list);    //将plug的链表成员移动到list
 
 	if (plug->rq_count > 2 && plug->multiple_queues)
 		list_sort(NULL, &list, plug_rq_cmp);
@@ -1731,10 +1737,11 @@ void blk_mq_flush_plug_list(struct blk_plug *plug, bool from_schedule)
 	depth = 0;
 
 	while (!list_empty(&list)) {
-		rq = list_entry_rq(list.next);
+		rq = list_entry_rq(list.next);  //取出个request
 		list_del_init(&rq->queuelist);
 		BUG_ON(!rq->q);
-		if (rq->mq_hctx != this_hctx || rq->mq_ctx != this_ctx) {
+        //这个实际上是保证了该list上所有的rq来自于同一个hctx和同一个ctx
+        if (rq->mq_hctx != this_hctx || rq->mq_ctx != this_ctx) {
 			if (this_hctx) {
 				trace_block_unplug(this_q, depth, !from_schedule);
 				blk_mq_sched_insert_requests(this_hctx, this_ctx,
@@ -1915,7 +1922,7 @@ void blk_mq_try_issue_list_directly(struct blk_mq_hw_ctx *hctx,
 
 static void blk_add_rq_to_plug(struct blk_plug *plug, struct request *rq)
 {
-	list_add_tail(&rq->queuelist, &plug->mq_list);
+	list_add_tail(&rq->queuelist, &plug->mq_list);      //加入mq_list
 	plug->rq_count++;
 	if (!plug->multiple_queues && !list_is_singular(&plug->mq_list)) {
 		struct request *tmp;
@@ -1929,33 +1936,36 @@ static void blk_add_rq_to_plug(struct blk_plug *plug, struct request *rq)
 
 static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 {
-	const int is_sync = op_is_sync(bio->bi_opf);
-	const int is_flush_fua = op_is_flush(bio->bi_opf);
+	const int is_sync = op_is_sync(bio->bi_opf);        //判断是否为同步
+	const int is_flush_fua = op_is_flush(bio->bi_opf);  //判断是否是屏障io
 	struct blk_mq_alloc_data data = { .flags = 0};
 	struct request *rq;
 	struct blk_plug *plug;
 	struct request *same_queue_rq = NULL;
 	blk_qc_t cookie;
-
+    //做DMA相关地址限制
 	blk_queue_bounce(q, &bio);
-
+    /* 判断当前bio是否超过预设的最大处理大小，若是则进行拆分，
+     * 拆分进行generic_make_request函数调用
+     */
 	blk_queue_split(q, &bio);
 
-	if (!bio_integrity_prep(bio))
+	if (!bio_integrity_prep(bio))                       //bio完整性判断
 		return BLK_QC_T_NONE;
-
+    /* 若非屏障IO并且设备队列支持合  并且plug队列中可进行合并则进行合并工作 */
 	if (!is_flush_fua && !blk_queue_nomerges(q) &&
+        //plug队列支持合并工作
 	    blk_attempt_plug_merge(q, bio, &same_queue_rq))
 		return BLK_QC_T_NONE;
 
-	if (blk_mq_sched_bio_merge(q, bio))
+	if (blk_mq_sched_bio_merge(q, bio))                 //合并到请求队列request_queue
 		return BLK_QC_T_NONE;
 
 	rq_qos_throttle(q, bio);
 
 	data.cmd_flags = bio->bi_opf;
-	rq = blk_mq_get_request(q, bio, &data);
-	if (unlikely(!rq)) {
+	rq = blk_mq_get_request(q, bio, &data);             //在mq中注册一个request
+	if (unlikely(!rq)) {                                //分配失败
 		rq_qos_cleanup(q, bio);
 		if (bio->bi_opf & REQ_NOWAIT)
 			bio_wouldblock_error(bio);
@@ -1968,15 +1978,15 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 
 	cookie = request_to_qc_t(data.hctx, rq);
 
-	blk_mq_bio_to_request(rq, bio);
+	blk_mq_bio_to_request(rq, bio);                     //将bio转换为一个request
 
 	plug = current->plug;
-	if (unlikely(is_flush_fua)) {
+	if (unlikely(is_flush_fua)) {       //如果是IO屏障则将其加入到flush队列中，该队列直接发送给driver
 		/* bypass scheduler for flush rq */
 		blk_insert_flush(rq);
 		blk_mq_run_hw_queue(data.hctx, true);
 	} else if (plug && (q->nr_hw_queues == 1 || q->mq_ops->commit_rqs ||
-				!blk_queue_nonrot(q))) {
+				!blk_queue_nonrot(q))) {    //不是SSD
 		/*
 		 * Use plugging if we have a ->commit_rqs() hook as well, as
 		 * we know the driver uses bd->last in a smart fashion.
@@ -1984,7 +1994,7 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 		 * Use normal plugging if this disk is slow HDD, as sequential
 		 * IO may benefit a lot from plug merging.
 		 */
-		unsigned int request_count = plug->rq_count;
+		unsigned int request_count = plug->rq_count;    
 		struct request *last = NULL;
 
 		if (!request_count)
@@ -1998,7 +2008,7 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 			trace_block_plug(q);
 		}
 
-		blk_add_rq_to_plug(plug, rq);
+		blk_add_rq_to_plug(plug, rq);           //将rq加入到plug
 	} else if (q->elevator) {
 		blk_mq_sched_insert_request(rq, false, true, true);
 	} else if (plug && !blk_queue_nomerges(q)) {
@@ -2021,6 +2031,7 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 		if (same_queue_rq) {
 			data.hctx = same_queue_rq->mq_hctx;
 			trace_block_unplug(q, 1, true);
+            //直接加入到底层队列中
 			blk_mq_try_issue_directly(data.hctx, same_queue_rq,
 					&cookie);
 		}
@@ -2028,6 +2039,7 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 			!data.hctx->dispatch_busy) {
 		blk_mq_try_issue_directly(data.hctx, rq, &cookie);
 	} else {
+        //这个应该是加入软件队列
 		blk_mq_sched_insert_request(rq, false, true, true);
 	}
 
@@ -2091,7 +2103,7 @@ struct blk_mq_tags *blk_mq_alloc_rq_map(struct blk_mq_tag_set *set,
 	if (!tags)
 		return NULL;
 
-	tags->rqs = kcalloc_node(nr_tags, sizeof(struct request *),
+	tags->rqs = kcalloc_node(nr_tags, sizeof(struct request *), //这个地方申请request指针
 				 GFP_NOIO | __GFP_NOWARN | __GFP_NORETRY,
 				 node);
 	if (!tags->rqs) {
@@ -2099,7 +2111,7 @@ struct blk_mq_tags *blk_mq_alloc_rq_map(struct blk_mq_tag_set *set,
 		return NULL;
 	}
 
-	tags->static_rqs = kcalloc_node(nr_tags, sizeof(struct request *),
+	tags->static_rqs = kcalloc_node(nr_tags, sizeof(struct request *),  //申请tags指针
 					GFP_NOIO | __GFP_NOWARN | __GFP_NORETRY,
 					node);
 	if (!tags->static_rqs) {
@@ -2149,11 +2161,11 @@ int blk_mq_alloc_rqs(struct blk_mq_tag_set *set, struct blk_mq_tags *tags,
 	 * to the cacheline size
 	 */
 	rq_size = round_up(sizeof(struct request) + set->cmd_size,
-				cache_line_size());
+				cache_line_size()); //以cache_line_size对齐
 	left = rq_size * depth;
 
 	for (i = 0; i < depth; ) {
-		int this_order = max_order;
+		int this_order = max_order; //max_older org = 4, 一次最多分配2 ^ 4个页面
 		struct page *page;
 		int to_do;
 		void *p;
@@ -2161,44 +2173,45 @@ int blk_mq_alloc_rqs(struct blk_mq_tag_set *set, struct blk_mq_tags *tags,
 		while (this_order && left < order_to_size(this_order - 1))
 			this_order--;
 
+        //这个地方好像有bug吧，当rq_size > order_to_size(this_order)
 		do {
 			page = alloc_pages_node(node,
 				GFP_NOIO | __GFP_NOWARN | __GFP_NORETRY | __GFP_ZERO,
 				this_order);
-			if (page)
+			if (page)                   //如果有内存
 				break;
-			if (!this_order--)
+			if (!this_order--)          //没有内存，但是this_order == 0
 				break;
-			if (order_to_size(this_order) < rq_size)
+			if (order_to_size(this_order) < rq_size)    //小于一个rq_size ?
 				break;
 		} while (1);
 
-		if (!page)
+		if (!page)                      //没有内存直接faild
 			goto fail;
 
 		page->private = this_order;
-		list_add_tail(&page->lru, &tags->page_list);
+		list_add_tail(&page->lru, &tags->page_list);    //自己管理 ?
 
-		p = page_address(page);
+		p = page_address(page);         //page 的虚拟地址
 		/*
 		 * Allow kmemleak to scan these pages as they contain pointers
 		 * to additional allocations like via ops->init_request().
 		 */
-		kmemleak_alloc(p, order_to_size(this_order), 1, GFP_NOIO);
-		entries_per_page = order_to_size(this_order) / rq_size;
-		to_do = min(entries_per_page, depth - i);
-		left -= to_do * rq_size;
+		kmemleak_alloc(p, order_to_size(this_order), 1, GFP_NOIO);      //这个1没有看懂啊
+		entries_per_page = order_to_size(this_order) / rq_size;         //这个是指分配了多少个rq_size了
+		to_do = min(entries_per_page, depth - i);           //取最小值? entries_per_page表示本轮循环能生成多少个request, depth -i 表示还剩余多少个
+		left -= to_do * rq_size;                            //减去
 		for (j = 0; j < to_do; j++) {
 			struct request *rq = p;
 
-			tags->static_rqs[i] = rq;
-			if (blk_mq_init_request(set, rq, hctx_idx, node)) {
+			tags->static_rqs[i] = rq;                       //赋值tags->static_rqs ??? rqs在哪里赋值的
+			if (blk_mq_init_request(set, rq, hctx_idx, node)) {         //初始化分配的request
 				tags->static_rqs[i] = NULL;
 				goto fail;
 			}
 
 			p += rq_size;
-			i++;
+			i++;                //处理一个加一个?
 		}
 	}
 	return 0;
@@ -2305,13 +2318,13 @@ static int blk_mq_init_hctx(struct request_queue *q,
 
 	cpuhp_state_add_instance_nocalls(CPUHP_BLK_MQ_DEAD, &hctx->cpuhp_dead);
 
-	hctx->tags = set->tags[hctx_idx];
+	hctx->tags = set->tags[hctx_idx];               //赋值tags
 
 	if (set->ops->init_hctx &&
 	    set->ops->init_hctx(hctx, set->driver_data, hctx_idx))
 		goto unregister_cpu_notifier;
 
-	if (blk_mq_init_request(set, hctx->fq->flush_rq, hctx_idx,
+	if (blk_mq_init_request(set, hctx->fq->flush_rq, hctx_idx,      //init request
 				hctx->numa_node))
 		goto exit_hctx;
 	return 0;
@@ -2355,7 +2368,7 @@ blk_mq_alloc_hctx(struct request_queue *q, struct blk_mq_tag_set *set,
 	 * Allocate space for all possible cpus to avoid allocation at
 	 * runtime
 	 */
-	hctx->ctxs = kmalloc_array_node(nr_cpu_ids, sizeof(void *),
+	hctx->ctxs = kmalloc_array_node(nr_cpu_ids, sizeof(void *),         //每个cpu一个
 			gfp, node);
 	if (!hctx->ctxs)
 		goto free_cpumask;
@@ -2363,13 +2376,13 @@ blk_mq_alloc_hctx(struct request_queue *q, struct blk_mq_tag_set *set,
 	if (sbitmap_init_node(&hctx->ctx_map, nr_cpu_ids, ilog2(8),
 				gfp, node))
 		goto free_ctxs;
-	hctx->nr_ctx = 0;
+	hctx->nr_ctx = 0;                                                   //没去爱你上面的ctx为0
 
 	spin_lock_init(&hctx->dispatch_wait_lock);
 	init_waitqueue_func_entry(&hctx->dispatch_wait, blk_mq_dispatch_wake);
 	INIT_LIST_HEAD(&hctx->dispatch_wait.entry);
 
-	hctx->fq = blk_alloc_flush_queue(q, hctx->numa_node, set->cmd_size,
+	hctx->fq = blk_alloc_flush_queue(q, hctx->numa_node, set->cmd_size, //分配flush fq
 			gfp);
 	if (!hctx->fq)
 		goto free_bitmap;
@@ -2391,7 +2404,7 @@ blk_mq_alloc_hctx(struct request_queue *q, struct blk_mq_tag_set *set,
  fail_alloc_hctx:
 	return NULL;
 }
-
+//软队列?
 static void blk_mq_init_cpu_queues(struct request_queue *q,
 				   unsigned int nr_hw_queues)
 {
@@ -2403,21 +2416,21 @@ static void blk_mq_init_cpu_queues(struct request_queue *q,
 		struct blk_mq_hw_ctx *hctx;
 		int k;
 
-		__ctx->cpu = i;
+		__ctx->cpu = i;                                         //赋值cpu
 		spin_lock_init(&__ctx->lock);
 		for (k = HCTX_TYPE_DEFAULT; k < HCTX_MAX_TYPES; k++)
 			INIT_LIST_HEAD(&__ctx->rq_lists[k]);
 
-		__ctx->queue = q;
+		__ctx->queue = q;                                       //赋值request_queue
 
 		/*
 		 * Set local node, IFF we have more than one hw queue. If
 		 * not, we remain on the home node of the device
 		 */
 		for (j = 0; j < set->nr_maps; j++) {
-			hctx = blk_mq_map_queue_type(q, j, i);
+			hctx = blk_mq_map_queue_type(q, j, i);              //通过这三个值取出hctx 主要有cpu和hctx_type
 			if (nr_hw_queues > 1 && hctx->numa_node == NUMA_NO_NODE)
-				hctx->numa_node = local_memory_node(cpu_to_node(i));
+				hctx->numa_node = local_memory_node(cpu_to_node(i));    //设置下numa_node??
 		}
 	}
 }
@@ -2426,12 +2439,12 @@ static bool __blk_mq_alloc_rq_map(struct blk_mq_tag_set *set, int hctx_idx)
 {
 	int ret = 0;
 
-	set->tags[hctx_idx] = blk_mq_alloc_rq_map(set, hctx_idx,
+	set->tags[hctx_idx] = blk_mq_alloc_rq_map(set, hctx_idx,        //分配一个tags, 并分配好request
 					set->queue_depth, set->reserved_tags);
 	if (!set->tags[hctx_idx])
 		return false;
 
-	ret = blk_mq_alloc_rqs(set, set->tags[hctx_idx], hctx_idx,
+	ret = blk_mq_alloc_rqs(set, set->tags[hctx_idx], hctx_idx,      
 				set->queue_depth);
 	if (!ret)
 		return true;
@@ -2463,14 +2476,14 @@ static void blk_mq_map_swqueue(struct request_queue *q)
 	 */
 	mutex_lock(&q->sysfs_lock);
 
-	queue_for_each_hw_ctx(q, hctx, i) {
+	queue_for_each_hw_ctx(q, hctx, i) {         //初始化
 		cpumask_clear(hctx->cpumask);
 		hctx->nr_ctx = 0;
 		hctx->dispatch_from = NULL;
 	}
 
 	/*
-	 * Map software to hardware queues.
+	 * Map software to hardware queues.         //软件队列映射硬件队列
 	 *
 	 * If the cpu isn't present, the cpu is mapped to first hctx.
 	 */
@@ -2490,7 +2503,7 @@ static void blk_mq_map_swqueue(struct request_queue *q)
 
 		ctx = per_cpu_ptr(q->queue_ctx, i);
 		for (j = 0; j < set->nr_maps; j++) {
-			if (!set->map[j].nr_queues) {
+			if (!set->map[j].nr_queues) {           // == 0 ?
 				ctx->hctxs[j] = blk_mq_map_queue_type(q,
 						HCTX_TYPE_DEFAULT, i);
 				continue;
@@ -2507,8 +2520,8 @@ static void blk_mq_map_swqueue(struct request_queue *q)
 				continue;
 
 			cpumask_set_cpu(i, hctx->cpumask);
-			hctx->type = j;
-			ctx->index_hw[hctx->type] = hctx->nr_ctx;
+			hctx->type = j;                             //表示硬件队列的类型
+			ctx->index_hw[hctx->type] = hctx->nr_ctx;   //这个相当于软件队列的对于这个硬件队列的index
 			hctx->ctxs[hctx->nr_ctx++] = ctx;
 
 			/*
@@ -2623,7 +2636,7 @@ static void blk_mq_add_queue_tag_set(struct blk_mq_tag_set *set,
 	}
 	if (set->flags & BLK_MQ_F_TAG_SHARED)
 		queue_set_hctx_shared(q, true);
-	list_add_tail_rcu(&q->tag_set_list, &set->tag_list);
+	list_add_tail_rcu(&q->tag_set_list, &set->tag_list);        //能共享?
 
 	mutex_unlock(&set->tag_list_lock);
 }
@@ -2634,11 +2647,11 @@ static int blk_mq_alloc_ctxs(struct request_queue *q)
 	struct blk_mq_ctxs *ctxs;
 	int cpu;
 
-	ctxs = kzalloc(sizeof(*ctxs), GFP_KERNEL);
+	ctxs = kzalloc(sizeof(*ctxs), GFP_KERNEL);          //分配一个ctxs
 	if (!ctxs)
 		return -ENOMEM;
 
-	ctxs->queue_ctx = alloc_percpu(struct blk_mq_ctx);
+	ctxs->queue_ctx = alloc_percpu(struct blk_mq_ctx);  //每个cpu一个ctx
 	if (!ctxs->queue_ctx)
 		goto fail;
 
@@ -2647,7 +2660,7 @@ static int blk_mq_alloc_ctxs(struct request_queue *q)
 		ctx->ctxs = ctxs;
 	}
 
-	q->mq_kobj = &ctxs->kobj;
+	q->mq_kobj = &ctxs->kobj;                           //共享一个kobj
 	q->queue_ctx = ctxs->queue_ctx;
 
 	return 0;
@@ -2745,8 +2758,8 @@ static struct blk_mq_hw_ctx *blk_mq_alloc_and_init_hctx(
 
 	/* reuse dead hctx first */
 	spin_lock(&q->unused_hctx_lock);
-	list_for_each_entry(tmp, &q->unused_hctx_list, hctx_list) {
-		if (tmp->numa_node == node) {
+	list_for_each_entry(tmp, &q->unused_hctx_list, hctx_list) {     //遍历没有使用的hctx list
+		if (tmp->numa_node == node) {                               //查看numa_node
 			hctx = tmp;
 			break;
 		}
@@ -2756,11 +2769,11 @@ static struct blk_mq_hw_ctx *blk_mq_alloc_and_init_hctx(
 	spin_unlock(&q->unused_hctx_lock);
 
 	if (!hctx)
-		hctx = blk_mq_alloc_hctx(q, set, node);
+		hctx = blk_mq_alloc_hctx(q, set, node);         //没有的话分配一个
 	if (!hctx)
 		goto fail;
 
-	if (blk_mq_init_hctx(q, set, hctx, hctx_idx))
+	if (blk_mq_init_hctx(q, set, hctx, hctx_idx))       //里面有赋值tag的操作
 		goto free_hctx;
 
 	return hctx;
@@ -2779,7 +2792,7 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 
 	/* protect against switching io scheduler  */
 	mutex_lock(&q->sysfs_lock);
-	for (i = 0; i < set->nr_hw_queues; i++) {
+	for (i = 0; i < set->nr_hw_queues; i++) {       //硬件队列数
 		int node;
 		struct blk_mq_hw_ctx *hctx;
 
@@ -2792,7 +2805,7 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 		if (hctxs[i] && (hctxs[i]->numa_node == node))
 			continue;
 
-		hctx = blk_mq_alloc_and_init_hctx(set, q, i, node);
+		hctx = blk_mq_alloc_and_init_hctx(set, q, i, node);     //分配硬件队列
 		if (hctx) {
 			if (hctxs[i])
 				blk_mq_exit_hctx(q, set, hctxs[i], i);
@@ -2829,7 +2842,7 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 			hctxs[j] = NULL;
 		}
 	}
-	mutex_unlock(&q->sysfs_lock);
+	mutex_ulock(&q->sysfs_lock);
 }
 
 /*
@@ -2857,14 +2870,14 @@ struct request_queue *blk_mq_init_allocated_queue(struct blk_mq_tag_set *set,
 	if (!q->poll_cb)
 		goto err_exit;
 
-	if (blk_mq_alloc_ctxs(q))
+	if (blk_mq_alloc_ctxs(q))           //分配ctxs 和ctx
 		goto err_exit;
 
 	/* init q->mq_kobj and sw queues' kobjects */
 	blk_mq_sysfs_init(q);
 
-	q->nr_queues = nr_hw_queues(set);
-	q->queue_hw_ctx = kcalloc_node(q->nr_queues, sizeof(*(q->queue_hw_ctx)),
+	q->nr_queues = nr_hw_queues(set);                                           //max(hwqueue, cpu num)
+	q->queue_hw_ctx = kcalloc_node(q->nr_queues, sizeof(*(q->queue_hw_ctx)),    //硬软队列映射表
 						GFP_KERNEL, set->numa_node);
 	if (!q->queue_hw_ctx)
 		goto err_sys_init;
@@ -2879,7 +2892,7 @@ struct request_queue *blk_mq_init_allocated_queue(struct blk_mq_tag_set *set,
 	INIT_WORK(&q->timeout_work, blk_mq_timeout_work);
 	blk_queue_rq_timeout(q, set->timeout ? set->timeout : 30 * HZ);
 
-	q->tag_set = set;
+	q->tag_set = set;                           //在这里赋值的tag_set
 
 	q->queue_flags |= QUEUE_FLAG_MQ_DEFAULT;
 	if (set->nr_maps > HCTX_TYPE_POLL &&
@@ -2888,7 +2901,7 @@ struct request_queue *blk_mq_init_allocated_queue(struct blk_mq_tag_set *set,
 
 	q->sg_reserved_size = INT_MAX;
 
-	INIT_DELAYED_WORK(&q->requeue_work, blk_mq_requeue_work);
+	INIT_DELAYED_WORK(&q->requeue_work, blk_mq_requeue_work);   //INIT requeue work
 	INIT_LIST_HEAD(&q->requeue_list);
 	spin_lock_init(&q->requeue_lock);
 
@@ -2941,7 +2954,7 @@ static int __blk_mq_alloc_rq_maps(struct blk_mq_tag_set *set)
 {
 	int i;
 
-	for (i = 0; i < set->nr_hw_queues; i++)
+	for (i = 0; i < set->nr_hw_queues; i++)     //硬件队列
 		if (!__blk_mq_alloc_rq_map(set, i))
 			goto out_unwind;
 
@@ -3059,7 +3072,7 @@ int blk_mq_alloc_tag_set(struct blk_mq_tag_set *set)
 	 * memory constrained environment. Limit us to 1 queue and
 	 * 64 tags to prevent using too much memory.
 	 */
-	if (is_kdump_kernel()) {
+	if (is_kdump_kernel()) {        //因为内存少，所以使用较少的队列数
 		set->nr_hw_queues = 1;
 		set->nr_maps = 1;
 		set->queue_depth = min(64U, set->queue_depth);
@@ -3067,30 +3080,35 @@ int blk_mq_alloc_tag_set(struct blk_mq_tag_set *set)
 	/*
 	 * There is no use for more h/w queues than cpus if we just have
 	 * a single map
-	 */
+	 */     //如果只有一个map，使用比cpu核多的队列数没有意义
 	if (set->nr_maps == 1 && set->nr_hw_queues > nr_cpu_ids)
 		set->nr_hw_queues = nr_cpu_ids;
-
+    //申请的个数为nr_hw_queues
 	set->tags = kcalloc_node(nr_hw_queues(set), sizeof(struct blk_mq_tags *),
-				 GFP_KERNEL, set->numa_node);
+				 GFP_KERNEL, set->numa_node);           //申请tags
 	if (!set->tags)
 		return -ENOMEM;
 
 	ret = -ENOMEM;
-	for (i = 0; i < set->nr_maps; i++) {
-		set->map[i].mq_map = kcalloc_node(nr_cpu_ids,
+    /*
+     * cpu大于硬件数: 多个软件队列映射到一个硬件队列
+     * cpu等于硬件队列数: 一对一映射
+     * cpu小于硬件队列数: nr_hw_queues 设置为cpu数, 一对一映射
+     */
+	for (i = 0; i < set->nr_maps; i++) {                    //映射表的个数
+		set->map[i].mq_map = kcalloc_node(nr_cpu_ids,       //cpu个数?
 						  sizeof(struct blk_mq_queue_map),
 						  GFP_KERNEL, set->numa_node);
 		if (!set->map[i].mq_map)
 			goto out_free_mq_map;
-		set->map[i].nr_queues = is_kdump_kernel() ? 1 : set->nr_hw_queues;
+		set->map[i].nr_queues = is_kdump_kernel() ? 1 : set->nr_hw_queues;  //nr_queue == nr_hw_queues
 	}
 
 	ret = blk_mq_update_queue_map(set);
 	if (ret)
 		goto out_free_mq_map;
 
-	ret = blk_mq_alloc_rq_maps(set);
+	ret = blk_mq_alloc_rq_maps(set);        //这个里面分配了tag 和request
 	if (ret)
 		goto out_free_mq_map;
 

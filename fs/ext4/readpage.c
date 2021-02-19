@@ -104,7 +104,7 @@ int ext4_mpage_readpages(struct address_space *mapping,
 	sector_t last_block_in_bio = 0;
 
 	struct inode *inode = mapping->host;
-	const unsigned blkbits = inode->i_blkbits;
+	const unsigned blkbits = inode->i_blkbits;      //以bit为单位的块大小
 	const unsigned blocks_per_page = PAGE_SIZE >> blkbits;
 	const unsigned blocksize = 1 << blkbits;
 	sector_t block_in_file;
@@ -122,14 +122,14 @@ int ext4_mpage_readpages(struct address_space *mapping,
 	map.m_len = 0;
 	map.m_flags = 0;
 
-	for (; nr_pages; nr_pages--) {
+	for (; nr_pages; nr_pages--) {              //循环nr_pages
 		int fully_mapped = 1;
 		unsigned first_hole = blocks_per_page;
 
 		prefetchw(&page->flags);
 		if (pages) {
 			page = list_entry(pages->prev, struct page, lru);
-			list_del(&page->lru);
+			list_del(&page->lru);               //取出page
 			if (add_to_page_cache_lru(page, mapping, page->index,
 				  readahead_gfp_mask(mapping)))
 				goto next_page;
@@ -137,11 +137,11 @@ int ext4_mpage_readpages(struct address_space *mapping,
 
 		if (page_has_buffers(page))
 			goto confused;
-
+        //PAGE_SHIFT - blkbits ?    表示几倍，也就是算出来block_index in file
 		block_in_file = (sector_t)page->index << (PAGE_SHIFT - blkbits);
-		last_block = block_in_file + nr_pages * blocks_per_page;
-		last_block_in_file = (i_size_read(inode) + blocksize - 1) >> blkbits;
-		if (last_block > last_block_in_file)
+		last_block = block_in_file + nr_pages * blocks_per_page;    //最后一个block的index
+		last_block_in_file = (i_size_read(inode) + blocksize - 1) >> blkbits; //这个文件的last block index
+		if (last_block > last_block_in_file)        //如果要读的block index, 比文件最大的block index 大
 			last_block = last_block_in_file;
 		page_block = 0;
 
@@ -149,18 +149,18 @@ int ext4_mpage_readpages(struct address_space *mapping,
 		 * Map blocks using the previous result first.
 		 */
 		if ((map.m_flags & EXT4_MAP_MAPPED) &&
-		    block_in_file > map.m_lblk &&
+		    block_in_file > map.m_lblk &&               //需要的block在map的blk范围中
 		    block_in_file < (map.m_lblk + map.m_len)) {
 			unsigned map_offset = block_in_file - map.m_lblk;
 			unsigned last = map.m_len - map_offset;
 
 			for (relative_block = 0; ; relative_block++) {
-				if (relative_block == last) {
+				if (relative_block == last) {           //== last 
 					/* needed? */
-					map.m_flags &= ~EXT4_MAP_MAPPED;
+					map.m_flags &= ~EXT4_MAP_MAPPED;    //为什么
 					break;
 				}
-				if (page_block == blocks_per_page)
+				if (page_block == blocks_per_page)      //等于一页了
 					break;
 				blocks[page_block] = map.m_pblk + map_offset +
 					relative_block;
@@ -175,8 +175,8 @@ int ext4_mpage_readpages(struct address_space *mapping,
 		 */
 		while (page_block < blocks_per_page) {
 			if (block_in_file < last_block) {
-				map.m_lblk = block_in_file;
-				map.m_len = last_block - block_in_file;
+				map.m_lblk = block_in_file;             //起始位置
+				map.m_len = last_block - block_in_file; //结束位置
 
 				if (ext4_map_blocks(NULL, inode, &map, 0) < 0) {
 				set_error_page:

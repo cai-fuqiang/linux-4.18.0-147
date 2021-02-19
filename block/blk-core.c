@@ -427,7 +427,7 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 	struct request_queue *q;
 	int ret;
 
-	q = kmem_cache_alloc_node(blk_requestq_cachep,
+	q = kmem_cache_alloc_node(blk_requestq_cachep,      //分配一个request_queue
 				gfp_mask | __GFP_ZERO, node_id);
 	if (!q)
 		return NULL;
@@ -551,7 +551,7 @@ bool bio_attempt_back_merge(struct request_queue *q, struct request *req,
 {
 	const int ff = bio->bi_opf & REQ_FAILFAST_MASK;
 
-	if (!ll_back_merge_fn(q, req, bio))
+	if (!ll_back_merge_fn(q, req, bio)) //最一些检查查看是否超过request最大字节，或者时request最大段数
 		return false;
 
 	trace_block_bio_backmerge(q, req, bio);
@@ -559,7 +559,7 @@ bool bio_attempt_back_merge(struct request_queue *q, struct request *req,
 	if ((req->cmd_flags & REQ_FAILFAST_MASK) != ff)
 		blk_rq_set_mixed_merge(req);
 
-	req->biotail->bi_next = bio;
+	req->biotail->bi_next = bio;        //进行合并
 	req->biotail = bio;
 	req->__data_len += bio->bi_iter.bi_size;
 
@@ -689,7 +689,7 @@ void blk_init_request_from_bio(struct request *req, struct bio *bio)
 	if (bio->bi_opf & REQ_RAHEAD)
 		req->cmd_flags |= REQ_FAILFAST_MASK;
 
-	req->__sector = bio->bi_iter.bi_sector;
+	req->__sector = bio->bi_iter.bi_sector;     //赋值_sector
 	req->ioprio = bio_prio(bio);
 	req->write_hint = bio->bi_write_hint;
 	blk_rq_bio_prep(req->q, req, bio);
@@ -938,9 +938,9 @@ end_io:
  * devices. It is passed a &struct bio, which describes the I/O that needs
  * to be done.
  *
- * generic_make_request() does not return any status.  The
+ * generic_make_request() does not return any status.  The                      //不返回任何状态，这个request成功与失败的返回值在completion中
  * success/failure status of the request, along with notification of
- * completion, is delivered asynchronously through the bio->bi_end_io
+ * completion, is delivered asynchronously through the bio->bi_end_io           //在bio->bi_end_io function中描述
  * function described (one day) else where.
  *
  * The caller of generic_make_request must make sure that bi_io_vec
@@ -951,7 +951,7 @@ end_io:
  *
  * generic_make_request and the drivers it calls may use bi_next if this
  * bio happens to be merged with someone else, and may resubmit the bio to
- * a lower device by calling into generic_make_request recursively, which
+ * a lower device by calling into generic_make_request recursively, which       //递归
  * means the bio should NOT be touched after the call to ->make_request_fn.
  */
 blk_qc_t generic_make_request(struct bio *bio)
@@ -970,9 +970,9 @@ blk_qc_t generic_make_request(struct bio *bio)
 		goto out;
 
 	/*
-	 * We only want one ->make_request_fn to be active at a time, else
-	 * stack usage with stacked devices could be a problem.  So use
-	 * current->bio_list to keep a list of requests submited by a
+	 * We only want one ->make_request_fn to be active at a time, else      //这个bio_list还是一个开关，是
+	 * stack usage with stacked devices could be a problem.  So use         //block 层接受队列的一个开关 ?
+	 * current->bio_list to keep a list of requests submited by a           //好像不是
 	 * make_request_fn function.  current->bio_list is also used as a
 	 * flag to say if generic_make_request is currently active in this
 	 * task or not.  If it is NULL, then no make_request is active.  If
@@ -980,7 +980,7 @@ blk_qc_t generic_make_request(struct bio *bio)
 	 * should be added at the tail
 	 */
 	if (current->bio_list) {
-		bio_list_add(&current->bio_list[0], bio);
+		bio_list_add(&current->bio_list[0], bio);                           //放在bio_list[0], 直接goto out
 		goto out;
 	}
 
@@ -992,7 +992,7 @@ blk_qc_t generic_make_request(struct bio *bio)
 	 * we assign bio_list to a pointer to the bio_list_on_stack,
 	 * thus initialising the bio_list of new bios to be
 	 * added.  ->make_request() may indeed add some more bios
-	 * through a recursive call to generic_make_request.  If it
+	 * through a recursive call to generic_make_request.  If it             //->make_request()会对generic_make_request进行递归调用 ?
 	 * did, we find a non-NULL value in bio_list and re-enter the loop
 	 * from the top.  In this case we really did just take the bio
 	 * of the top of the list (no pretending) and so remove it from
@@ -1000,9 +1000,9 @@ blk_qc_t generic_make_request(struct bio *bio)
 	 */
 	BUG_ON(bio->bi_next);
 	bio_list_init(&bio_list_on_stack[0]);
-	current->bio_list = bio_list_on_stack;
+	current->bio_list = bio_list_on_stack;                                  //这时候是空
 	do {
-		struct request_queue *q = bio->bi_disk->queue;
+		struct request_queue *q = bio->bi_disk->queue;                      //获取队列
 		blk_mq_req_flags_t flags = bio->bi_opf & REQ_NOWAIT ?
 			BLK_MQ_REQ_NOWAIT : 0;
 
@@ -1012,7 +1012,7 @@ blk_qc_t generic_make_request(struct bio *bio)
 			/* Create a fresh bio_list for all subordinate requests */
 			bio_list_on_stack[1] = bio_list_on_stack[0];
 			bio_list_init(&bio_list_on_stack[0]);
-			ret = q->make_request_fn(q, bio);
+			ret = q->make_request_fn(q, bio);                               //制造一个request,并加到request_queue
 
 			blk_queue_exit(q);
 
@@ -1442,7 +1442,7 @@ void blk_rq_bio_prep(struct request_queue *q, struct request *rq,
 		rq->nr_phys_segments = 1;
 
 	rq->__data_len = bio->bi_iter.bi_size;
-	rq->bio = rq->biotail = bio;
+	rq->bio = rq->biotail = bio;        //在这里搭建好了队列
 
 	if (bio->bi_disk)
 		rq->rq_disk = bio->bi_disk;

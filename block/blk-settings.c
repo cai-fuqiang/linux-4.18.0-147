@@ -127,6 +127,8 @@ EXPORT_SYMBOL(blk_queue_make_request);
  * @max_addr: the maximum address the device can handle
  *
  * Description:
+ *    这个函数相当于这是一个限制@max_addr，在这个addr之上的地址，都需要分配一个
+ *    低内存的地址用作与硬件进行dma交互
  *    Different hardware can have different requirements as to what pages
  *    it can do I/O directly to. A low level driver can call
  *    blk_queue_bounce_limit to have lower memory pages allocated as bounce
