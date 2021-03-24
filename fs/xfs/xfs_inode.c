@@ -713,12 +713,11 @@ out_unlock:
 	*ipp = NULL;
 	return error;
 }
-
-/*
+/* 
  * Allocate an inode on disk and return a copy of its in-core version.
- * The in-core inode is locked exclusively.  Set mode, nlink, and rdev
+ * The in-core inode is locked exclusively(独自，独占).  Set mode, nlink, and rdev
  * appropriately within the inode.  The uid and gid for the inode are
- * set according to the contents of the given cred structure.
+ * set according to the contents(内容) of the given cred structure.
  *
  * Use xfs_dialloc() to allocate the on-disk inode. If xfs_dialloc()
  * has a free inode available, call xfs_iget() to obtain the in-core
@@ -954,6 +953,7 @@ xfs_ialloc(
 
 /*
  * Allocates a new inode from disk and return a pointer to the
+ *                   例程         内部的
  * incore copy. This routine will internally commit the current
  * transaction and allocate a new one if the Space Manager needed
  * to do an allocation to replenish the inode free-list.
@@ -988,17 +988,22 @@ xfs_dir_ialloc(
 	/*
 	 * xfs_ialloc will return a pointer to an incore inode if
 	 * the Space Manager has an available inode on the free
-	 * list. Otherwise, it will do an allocation and replenish
+	 * list. Otherwise, it will do an allocation and replenish(补充)
 	 * the freelist.  Since we can only do one allocation per
 	 * transaction without deadlocks, we will need to commit the
-	 * current transaction and start a new one.  We will then
-	 * need to call xfs_ialloc again to get the inode.
+	 * current transaction and start a new one.因为我们每个事务只能分配一个
+     * 没有死锁的分配，我门需要提交当前事务，并开始一个新的事务)
+     * We will then need to call xfs_ialloc again to get the inode.
+     * (然后我们需要调用xfs_ialloc再一次获取inode)
 	 *
 	 * If xfs_ialloc did an allocation to replenish the freelist,
 	 * it returns the bp containing the head of the freelist as
-	 * ialloc_context. We will hold a lock on it across the
+	 * ialloc_context.(如果xfs_ialloc分配补充空闲列表，则它将包含空闲列表
+     * 手部的bp作为ialloc_context返回) We will hold a lock on it across the
 	 * transaction commit so that no other process can steal
 	 * the inode(s) that we've just allocated.
+     * (我们将在事务提交期间对其进行锁定，以便其他任何进程都不能窃取我们刚
+     * 刚分配的inode)
 	 */
 	code = xfs_ialloc(tp, dp, mode, nlink, rdev, prid, &ialloc_context,
 			&ip);
@@ -1007,6 +1012,7 @@ xfs_dir_ialloc(
 	 * Return an error if we were unable to allocate a new inode.
 	 * This should only happen if we run out of space on disk or
 	 * encounter a disk error.
+     * (只有当超过磁盘空间，或者遇到了磁盘错误是否才可能出错)
 	 */
 	if (code) {
 		*ipp = NULL;
@@ -1020,9 +1026,13 @@ xfs_dir_ialloc(
 	/*
 	 * If the AGI buffer is non-NULL, then we were unable to get an
 	 * inode in one operation.  We need to commit the current
-	 * transaction and call xfs_ialloc() again.  It is guaranteed
+	 * transaction and call xfs_ialloc() again.  It is guaranteed(保证)
 	 * to succeed the second time.
 	 */
+    /*
+     * 如果AGI buffer是non-NULL, 我们不能获取inode一次的操作中.我们需要commit
+     * 当前的transcation, 并且再调用一次xfs_iallic.它保证在第二次会成功
+     */
 	if (ialloc_context) {
 		/*
 		 * Normally, xfs_trans_commit releases all the locks.
@@ -1031,6 +1041,11 @@ xfs_dir_ialloc(
 		 * processes from doing any allocations in this
 		 * allocation group.
 		 */
+        /*
+         * 正常的, xfs_trans_commit 会释放所有锁.我们调用bhold在
+         * 整个提交过程中挂在ialloc_context.保留此缓冲区可以防止
+         * 其他任何进程在此分配组中进行任何分配
+         */
 		xfs_trans_bhold(tp, ialloc_context);
 
 		/*
@@ -1206,6 +1221,12 @@ xfs_create(
 	 * entry pointing to them, but a directory also the "." entry
 	 * pointing to itself.
 	 */
+    /*
+     * 新创建的常规文件或者特殊文件只有一个指向他们的directory entry，
+     * 但是目录还有"." entry指向他们自己
+     *
+     * 这个参数是设置该inode的节点数
+     */
 	error = xfs_dir_ialloc(&tp, dp, mode, is_dir ? 2 : 1, rdev, prid, &ip);
 	if (error)
 		goto out_trans_cancel;

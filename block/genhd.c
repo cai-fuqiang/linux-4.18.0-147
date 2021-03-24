@@ -1464,7 +1464,7 @@ struct gendisk *__alloc_disk_node(int minors, int node_id)
 		minors = DISK_MAX_PARTS;
 	}
 
-	disk = kzalloc_node(sizeof(struct gendisk), GFP_KERNEL, node_id);
+	disk = kzalloc_node(sizeof(struct gendisk), GFP_KERNEL, node_id);       //分配gendisk
 	if (disk) {
 		if (!init_part_stats(&disk->part0)) {
 			kfree(disk);

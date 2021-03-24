@@ -501,12 +501,12 @@ retry:
 	spin_lock(&sb_lock);
 	if (test) {
 		hlist_for_each_entry(old, &type->fs_supers, s_instances) {
-			if (!test(old, data))
+			if (!test(old, data))               //如果有该super_block的数据结构, 到下个if
 				continue;
-			if (user_ns != old->s_user_ns) {
+			if (user_ns != old->s_user_ns) {    //不是一个user 命名空间
 				spin_unlock(&sb_lock);
 				destroy_unused_super(s);
-				return ERR_PTR(-EBUSY);
+				return ERR_PTR(-EBUSY);         //直接返回EBUSY??
 			}
 			if (!grab_super(old))
 				goto retry;
@@ -516,13 +516,13 @@ retry:
 	}
 	if (!s) {
 		spin_unlock(&sb_lock);
-		s = alloc_super(type, (flags & ~SB_SUBMOUNT), user_ns);
+		s = alloc_super(type, (flags & ~SB_SUBMOUNT), user_ns); //重新分配alloc_super
 		if (!s)
 			return ERR_PTR(-ENOMEM);
 		goto retry;
 	}
 
-	err = set(s, data);
+	err = set(s, data);                                         //调用set函数
 	if (err) {
 		spin_unlock(&sb_lock);
 		destroy_unused_super(s);
@@ -1098,7 +1098,7 @@ static int set_bdev_super(struct super_block *s, void *data)
 
 static int test_bdev_super(struct super_block *s, void *data)
 {
-	return (void *)s->s_bdev == data;
+	return (void *)s->s_bdev == data;       //检查该fs的block_device是否一样
 }
 
 struct dentry *mount_bdev(struct file_system_type *fs_type,
@@ -1134,9 +1134,9 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 	if (IS_ERR(s))
 		goto error_s;
 
-	if (s->s_root) {
+	if (s->s_root) {                            //如果有则表示不是第一次,
 		if ((flags ^ s->s_flags) & SB_RDONLY) {
-			deactivate_locked_super(s);
+			deactivate_locked_super(s); 
 			error = -EBUSY;
 			goto error_bdev;
 		}
@@ -1149,12 +1149,12 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 		 * holding an active reference.
 		 */
 		up_write(&s->s_umount);
-		blkdev_put(bdev, mode);
+		blkdev_put(bdev, mode);                             //既然共用了super_block，则减少引用计数
 		down_write(&s->s_umount);
 	} else {
-		s->s_mode = mode;
+		s->s_mode = mode;                                   //新分配的
 		snprintf(s->s_id, sizeof(s->s_id), "%pg", bdev);
-		sb_set_blocksize(s, block_size(bdev));
+		sb_set_blocksize(s, block_size(bdev));              //
 		error = fill_super(s, data, flags & SB_SILENT ? 1 : 0);
 		if (error) {
 			deactivate_locked_super(s);

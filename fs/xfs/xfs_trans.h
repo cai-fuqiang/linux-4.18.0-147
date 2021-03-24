@@ -97,6 +97,7 @@ void	xfs_log_item_init(struct xfs_mount *mp, struct xfs_log_item *item,
 
 /*
  * This is the structure maintained for every active transaction.
+ *                        维护         每个活动的事务
  */
 typedef struct xfs_trans {
 	unsigned int		t_magic;	/* magic number */

@@ -4502,7 +4502,7 @@ fail:
 static struct cgroup_subsys_state * __ref
 mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 {
-	struct mem_cgroup *parent = mem_cgroup_from_css(parent_css);
+	struct mem_cgroup *parent = mem_cgroup_from_css(parent_css);    //获取mem_cgroup
 	struct mem_cgroup *memcg;
 	long error = -ENOMEM;
 

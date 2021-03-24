@@ -595,7 +595,7 @@ char *strsep(char **s, const char *ct)
 	if (sbegin == NULL)
 		return NULL;
 
-	end = strpbrk(sbegin, ct);
+	end = strpbrk(sbegin, ct);      //从sbegin字符串中找出ct的子串
 	if (end)
 		*end++ = '\0';
 	*s = end;

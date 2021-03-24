@@ -330,7 +330,7 @@ static struct dentry *start_creating(const char *name, struct dentry *parent)
 	 * have around.
 	 */
 	if (!parent)
-		parent = tracefs_mount->mnt_root;
+		parent = tracefs_mount->mnt_root;   //如果没有parent 则为mnt_root
 
 	inode_lock(parent->d_inode);
 	dentry = lookup_one_len(name, parent, strlen(name));

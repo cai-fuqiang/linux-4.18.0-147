@@ -741,7 +741,7 @@ mountpoint:
 	read_seqlock_excl(&mount_lock);
 	new->m_dentry = dentry;
 	new->m_count = 1;
-	hlist_add_head(&new->m_hash, mp_hash(dentry));
+	hlist_add_head(&new->m_hash, mp_hash(dentry));      //将new->m_hash 加入到
 	INIT_HLIST_HEAD(&new->m_list);
 	read_sequnlock_excl(&mount_lock);
 
@@ -844,8 +844,8 @@ void mnt_set_mountpoint(struct mount *mnt,
 static void __attach_mnt(struct mount *mnt, struct mount *parent)
 {
 	hlist_add_head_rcu(&mnt->mnt_hash,
-			   m_hash(&parent->mnt, mnt->mnt_mountpoint));
-	list_add_tail(&mnt->mnt_child, &parent->mnt_mounts);
+			   m_hash(&parent->mnt, mnt->mnt_mountpoint));  //parent->mnt 和current mnt mnt_mountpoint
+	list_add_tail(&mnt->mnt_child, &parent->mnt_mounts);    //加入parent->mnt_mounts
 }
 
 /*
@@ -907,7 +907,7 @@ static void commit_tree(struct mount *mnt)
 	list_for_each_entry(m, &head, mnt_list)
 		m->mnt_ns = n;
 
-	list_splice(&head, n->list.prev);
+	list_splice(&head, n->list.prev);       //在这加入命名空间
 
 	n->mounts += n->pending_mounts;
 	n->pending_mounts = 0;
@@ -1954,7 +1954,7 @@ static int attach_recursive_mnt(struct mount *source_mnt,
 	/* Preallocate a mountpoint in case the new mounts need
 	 * to be tucked under other mounts.
 	 */
-	smp = get_mountpoint(source_mnt->mnt.mnt_root);
+	smp = get_mountpoint(source_mnt->mnt.mnt_root);     //得到source_mnt
 	if (IS_ERR(smp))
 		return PTR_ERR(smp);
 
@@ -1965,11 +1965,11 @@ static int attach_recursive_mnt(struct mount *source_mnt,
 			goto out;
 	}
 
-	if (IS_MNT_SHARED(dest_mnt)) {
+	if (IS_MNT_SHARED(dest_mnt)) {                      //该mnt是shared属性
 		err = invent_group_ids(source_mnt, true);
 		if (err)
 			goto out;
-		err = propagate_mnt(dest_mnt, dest_mp, source_mnt, &tree_list);
+		err = propagate_mnt(dest_mnt, dest_mp, source_mnt, &tree_list); //进行传播
 		lock_mount_hash();
 		if (err)
 			goto out_cleanup_ids;
@@ -1983,7 +1983,7 @@ static int attach_recursive_mnt(struct mount *source_mnt,
 		attach_mnt(source_mnt, dest_mnt, dest_mp);
 		touch_mnt_namespace(source_mnt->mnt_ns);
 	} else {
-		mnt_set_mountpoint(dest_mnt, dest_mp, source_mnt);
+		mnt_set_mountpoint(dest_mnt, dest_mp, source_mnt);  //在这里会设置mnt_parent
 		commit_tree(source_mnt);
 	}
 
@@ -2029,10 +2029,10 @@ retry:
 		inode_unlock(dentry->d_inode);
 		return ERR_PTR(-ENOENT);
 	}
-	namespace_lock();
-	mnt = lookup_mnt(path);
-	if (likely(!mnt)) {
-		struct mountpoint *mp = get_mountpoint(dentry);
+	namespace_lock();                                       //并且在这个地方进行namespace_lock(), 这个是仅对于mount命名空间
+	mnt = lookup_mnt(path);                                 //获取了一个mnt, 该mnt为child_mnt
+	if (likely(!mnt)) {                                     //没找到
+		struct mountpoint *mp = get_mountpoint(dentry);     //分配一个mountpoint, 并将mountpoint加入到mountpoint_hashtable  hash表中
 		if (IS_ERR(mp)) {
 			namespace_unlock();
 			inode_unlock(dentry->d_inode);
@@ -2040,12 +2040,12 @@ retry:
 		}
 		return mp;
 	}
-	namespace_unlock();
+	namespace_unlock();                                     //找到了, 在重新找一次
 	inode_unlock(path->dentry->d_inode);
 	path_put(path);
-	path->mnt = mnt;
-	dentry = path->dentry = dget(mnt->mnt_root);
-	goto retry;
+	path->mnt = mnt;                                        //相当于赋值为child_mnt
+	dentry = path->dentry = dget(mnt->mnt_root);            
+	goto retry;                                             //相当于接着往后找，并找到最后一个
 }
 
 static void unlock_mount(struct mountpoint *where)
@@ -2059,9 +2059,9 @@ static void unlock_mount(struct mountpoint *where)
 	namespace_unlock();
 	inode_unlock(dentry->d_inode);
 }
-
+//该函数是将新分配的mnt安装到整个vfs中
 static int graft_tree(struct mount *mnt, struct mount *p, struct mountpoint *mp)
-{
+{   
 	if (mnt->mnt.mnt_sb->s_flags & SB_NOUSER)
 		return -EINVAL;
 
@@ -2401,7 +2401,7 @@ static int do_add_mount(struct mount *newmnt, struct path *path, int mnt_flags)
 
 	mnt_flags &= ~MNT_INTERNAL_FLAGS;
 
-	mp = lock_mount(path);
+	mp = lock_mount(path);          //获取一个mountpoint
 	if (IS_ERR(mp))
 		return PTR_ERR(mp);
 

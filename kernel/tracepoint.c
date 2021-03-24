@@ -121,7 +121,7 @@ func_add(struct tracepoint_func **funcs, struct tracepoint_func *tp_func,
 	if (new == NULL)
 		return ERR_PTR(-ENOMEM);
 	if (old) {
-		if (pos < 0) {
+		if (pos < 0) {          //这个是有最max prio
 			pos = nr_probes;
 			memcpy(new, old, nr_probes * sizeof(struct tracepoint_func));
 		} else {
@@ -133,8 +133,8 @@ func_add(struct tracepoint_func **funcs, struct tracepoint_func *tp_func,
 		}
 	} else
 		pos = 0;
-	new[pos] = *tp_func;
-	new[nr_probes + 1].func = NULL;
+	new[pos] = *tp_func;                    //赋值新的tp_func
+	new[nr_probes + 1].func = NULL;         //最后一个赋值为NULL
 	*funcs = new;
 	debug_print_probes(*funcs);
 	return old;
@@ -220,7 +220,7 @@ static int tracepoint_add_func(struct tracepoint *tp,
 	rcu_assign_pointer(tp->funcs, tp_funcs);
 	if (!static_key_enabled(&tp->key))
 		static_key_slow_inc(&tp->key);
-	release_probes(old);
+	release_probes(old);                        //释放old
 	return 0;
 }
 

@@ -987,7 +987,7 @@ static struct block_device *bd_acquire(struct inode *inode)
 	if (bdev)
 		bd_forget(inode);
 
-	bdev = bdget(inode->i_rdev);
+	bdev = bdget(inode->i_rdev);                //根据inode->i_rdev获取block_device
 	if (bdev) {
 		spin_lock(&bdev_lock);
 		if (!inode->i_bdev) {
@@ -1637,7 +1637,7 @@ int blkdev_get(struct block_device *bdev, fmode_t mode, void *holder)
 
 	WARN_ON_ONCE((mode & FMODE_EXCL) && !holder);
 
-	if ((mode & FMODE_EXCL) && holder) {
+	if ((mode & FMODE_EXCL) && holder) {        //独占
 		whole = bd_start_claiming(bdev, holder);
 		if (IS_ERR(whole)) {
 			bdput(bdev);
@@ -2116,7 +2116,7 @@ struct block_device *lookup_bdev(const char *pathname)
 	if (!pathname || !*pathname)
 		return ERR_PTR(-EINVAL);
 
-	error = kern_path(pathname, LOOKUP_FOLLOW, &path);
+	error = kern_path(pathname, LOOKUP_FOLLOW, &path);      //这个返回的设备实际上是(设备文件/dev/nvme0n1)的path
 	if (error)
 		return ERR_PTR(error);
 
@@ -2128,7 +2128,7 @@ struct block_device *lookup_bdev(const char *pathname)
 	if (!may_open_dev(&path))
 		goto fail;
 	error = -ENOMEM;
-	bdev = bd_acquire(inode);
+	bdev = bd_acquire(inode);                               //根据inode获取bdev
 	if (!bdev)
 		goto fail;
 out:

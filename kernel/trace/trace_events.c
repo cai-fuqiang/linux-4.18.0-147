@@ -2265,7 +2265,7 @@ trace_create_new_event(struct trace_event_call *call,
 	atomic_set(&file->sm_ref, 0);
 	atomic_set(&file->tm_ref, 0);
 	INIT_LIST_HEAD(&file->triggers);
-	list_add(&file->list, &tr->events);
+	list_add(&file->list, &tr->events);     //加入到tr->events中
 
 	return file;
 }
@@ -3064,6 +3064,7 @@ early_enable_events(struct trace_array *tr, bool disable_first)
 	int ret;
 
 	while (true) {
+        //在cmdline中，各个event_call是通过','分隔的
 		token = strsep(&buf, ",");
 
 		if (!token)
@@ -3071,10 +3072,10 @@ early_enable_events(struct trace_array *tr, bool disable_first)
 
 		if (*token) {
 			/* Restarting syscalls requires that we stop them first */
-			if (disable_first)
+			if (disable_first)          //如果是disable的话，先取消使能
 				ftrace_set_clr_event(tr, token, 0);
 
-			ret = ftrace_set_clr_event(tr, token, 1);
+			ret = ftrace_set_clr_event(tr, token, 1);  //使能该trace_event
 			if (ret)
 				pr_warn("Failed to enable trace event: %s\n", token);
 		}
@@ -3099,7 +3100,7 @@ static __init int event_trace_enable(void)
 		call = *iter;
 		ret = event_init(call);
 		if (!ret)
-			list_add(&call->list, &ftrace_events);
+			list_add(&call->list, &ftrace_events);      //加入到ftrace_events中
 	}
 
 	/*

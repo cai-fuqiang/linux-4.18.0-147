@@ -588,7 +588,7 @@ struct dentry *debugfs_create_automount(const char *name,
 	dentry->d_fsdata = (void *)f;
 	/* directory inodes start off with i_nlink == 2 (for "." entry) */
 	inc_nlink(inode);
-	d_instantiate(dentry, inode);
+	d_instantiate(dentry, inode);                       //将inode连接到dentry
 	inc_nlink(d_inode(dentry->d_parent));
 	fsnotify_mkdir(d_inode(dentry->d_parent), dentry);
 	return end_creating(dentry);

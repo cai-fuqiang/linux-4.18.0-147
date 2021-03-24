@@ -408,12 +408,12 @@ int pagecache_write_end(struct file *, struct address_space *mapping,
 
 struct address_space {
 	struct inode		*host;		/* owner: inode, block_device */
-	struct radix_tree_root	i_pages;	/* cached pages */
+	struct radix_tree_root	i_pages;	/* cached pages */      //用来通过address_space获取page的结构
 	atomic_t		i_mmap_writable;/* count VM_SHARED mappings */
-	struct rb_root_cached	i_mmap;		/* tree of private and shared mappings */
+	struct rb_root_cached	i_mmap;		/* tree of private and shared mappings */   //链接各个vm_arm_struct?
 	struct rw_semaphore	i_mmap_rwsem;	/* protect tree, count, list */
 	/* Protected by the i_pages lock */
-	unsigned long		nrpages;	/* number of total pages */
+	unsigned long		nrpages;	/* number of total pages */  //numbers
 	/* number of shadow or DAX exceptional entries */
 	unsigned long		nrexceptional;
 	pgoff_t			writeback_index;/* writeback starts here */
@@ -439,7 +439,7 @@ struct request_queue;
 struct block_device {
 	dev_t			bd_dev;  /* not a kdev_t - it's a search key */
 	int			bd_openers;
-	struct inode *		bd_inode;	/* will die */
+	struct inode *		bd_inode;	/* will die */  //块设备文件bd_inode
 	struct super_block *	bd_super;
 	struct mutex		bd_mutex;	/* open/close mutex */
 	void *			bd_claiming;

@@ -364,11 +364,11 @@ enum {
 };
 
 struct trace_event_file {
-	struct list_head		list;
-	struct trace_event_call		*event_call;
-	struct event_filter __rcu	*filter;
-	struct dentry			*dir;
-	struct trace_array		*tr;
+	struct list_head		list;               //链入到tr->events
+	struct trace_event_call		*event_call;    //event_call
+	struct event_filter __rcu	*filter;        //filter
+	struct dentry			*dir;               //该trace_events的dir
+	struct trace_array		*tr;                //tr
 	struct trace_subsystem_dir	*system;
 	struct list_head		triggers;
 

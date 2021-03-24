@@ -1975,7 +1975,7 @@ int cgroup_setup_root(struct cgroup_root *root, u16 ss_mask)
 	ret = cgroup_idr_alloc(&root->cgroup_idr, root_cgrp, 1, 2, GFP_KERNEL);
 	if (ret < 0)
 		goto out;
-	root_cgrp->id = ret;
+	root_cgrp->id = ret;                //分配id
 	root_cgrp->ancestor_ids[0] = ret;
 
 	ret = percpu_ref_init(&root_cgrp->self.refcnt, css_release,
@@ -1990,7 +1990,8 @@ int cgroup_setup_root(struct cgroup_root *root, u16 ss_mask)
 	 * controllers on the default hierarchy and thus create new csets,
 	 * which can't be more than the existing ones.  Allocate 2x.
 	 */
-	ret = allocate_cgrp_cset_links(2 * css_set_count, &tmp_links);
+    //分配cset_links ,为 2 * css_set_count
+	ret = allocate_cgrp_cset_links(2 * css_set_count, &tmp_links);  
 	if (ret)
 		goto cancel_ref;
 
@@ -3898,10 +3899,10 @@ static int cgroup_init_cftypes(struct cgroup_subsys *ss, struct cftype *cfts)
 
 		WARN_ON(cft->ss || cft->kf_ops);
 
-		if (cft->seq_start)
-			kf_ops = &cgroup_kf_ops;
+		if (cft->seq_start)             
+			kf_ops = &cgroup_kf_ops;        //赋值kf_ops
 		else
-			kf_ops = &cgroup_kf_single_ops;
+			kf_ops = &cgroup_kf_single_ops; 
 
 		/*
 		 * Ugh... if @cft wants a custom max_write_len, we need to
@@ -3916,8 +3917,8 @@ static int cgroup_init_cftypes(struct cgroup_subsys *ss, struct cftype *cfts)
 			kf_ops->atomic_write_len = cft->max_write_len;
 		}
 
-		cft->kf_ops = kf_ops;
-		cft->ss = ss;
+		cft->kf_ops = kf_ops;               //赋值kf_ops
+		cft->ss = ss;                       //赋值ss
 	}
 
 	return 0;
@@ -3987,8 +3988,8 @@ static int cgroup_add_cftypes(struct cgroup_subsys *ss, struct cftype *cfts)
 
 	mutex_lock(&cgroup_mutex);
 
-	list_add_tail(&cfts->node, &ss->cfts);
-	ret = cgroup_apply_cftypes(cfts, true);
+	list_add_tail(&cfts->node, &ss->cfts);      //连入ss->cfts
+	ret = cgroup_apply_cftypes(cfts, true); 
 	if (ret)
 		cgroup_rm_cftypes_locked(cfts);
 
@@ -5478,12 +5479,12 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 
 	mutex_lock(&cgroup_mutex);
 
-	idr_init(&ss->css_idr);
+	idr_init(&ss->css_idr);             //初始化idr
 	INIT_LIST_HEAD(&ss->cfts);
 
 	/* Create the root cgroup state for this subsystem */
 	ss->root = &cgrp_dfl_root;
-	css = ss->css_alloc(cgroup_css(&cgrp_dfl_root.cgrp, ss));
+	css = ss->css_alloc(cgroup_css(&cgrp_dfl_root.cgrp, ss));   //调用css_alloc
 	/* We don't handle early failures gracefully */
 	BUG_ON(IS_ERR(css));
 	init_and_link_css(css, ss, &cgrp_dfl_root.cgrp);
@@ -5506,7 +5507,7 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 	 * pointer to this state - since the subsystem is
 	 * newly registered, all tasks and hence the
 	 * init_css_set is in the subsystem's root cgroup. */
-	init_css_set.subsys[ss->id] = css;
+	init_css_set.subsys[ss->id] = css;      //赋值init_css_set.subsys[]
 
 	have_fork_callback |= (bool)ss->fork << ss->id;
 	have_exit_callback |= (bool)ss->exit << ss->id;
@@ -5535,7 +5536,7 @@ int __init cgroup_init_early(void)
 	struct cgroup_subsys *ss;
 	int i;
 
-	init_cgroup_root(&cgrp_dfl_root, &opts);
+	init_cgroup_root(&cgrp_dfl_root, &opts);    //init cgroup
 	cgrp_dfl_root.cgrp.self.flags |= CSS_NO_REF;
 
 	RCU_INIT_POINTER(init_task.cgroups, &init_css_set);
@@ -5548,7 +5549,7 @@ int __init cgroup_init_early(void)
 		WARN(strlen(cgroup_subsys_name[i]) > MAX_CGROUP_TYPE_NAMELEN,
 		     "cgroup_subsys_name %s too long\n", cgroup_subsys_name[i]);
 
-		ss->id = i;
+		ss->id = i;                             //赋值id
 		ss->name = cgroup_subsys_name[i];
 		if (!ss->legacy_name)
 			ss->legacy_name = cgroup_subsys_name[i];
@@ -5593,7 +5594,7 @@ int __init cgroup_init(void)
 	 * Add init_css_set to the hash table so that dfl_root can link to
 	 * it during init.
 	 */
-	hash_add(css_set_table, &init_css_set.hlist,
+	hash_add(css_set_table, &init_css_set.hlist,        //将init_css_set链入css_set_table
 		 css_set_hash(init_css_set.subsys));
 
 	BUG_ON(cgroup_setup_root(&cgrp_dfl_root, 0));
@@ -5609,9 +5610,12 @@ int __init cgroup_init(void)
 						   GFP_KERNEL);
 			BUG_ON(css->id < 0);
 		} else {
+            //未设置early_init
 			cgroup_init_subsys(ss, false);
 		}
-
+        /*
+         * cgroup.e_csets会连接该层级所有的css_set
+         */
 		list_add_tail(&init_css_set.e_cset_node[ssid],
 			      &cgrp_dfl_root.cgrp.e_csets[ssid]);
 

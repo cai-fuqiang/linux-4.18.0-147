@@ -202,8 +202,8 @@ void blk_mq_sched_dispatch_requests(struct blk_mq_hw_ctx *hctx)
 	 * on the dispatch list or we were able to dispatch from the
 	 * dispatch list.
 	 */
-	if (!list_empty(&rq_list)) {                    //先进行这个队列的派发
-		blk_mq_sched_mark_restart_hctx(hctx);       //先不看这个
+	if (!list_empty(&rq_list)) {                    //先进性dispatch队列的派发
+		blk_mq_sched_mark_restart_hctx(hctx);       //
 		if (blk_mq_dispatch_rq_list(q, &rq_list, false)) {
 			if (has_sched_dispatch)                 //配置了调度器
 				blk_mq_do_dispatch_sched(hctx);

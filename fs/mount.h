@@ -32,7 +32,7 @@ struct mountpoint {
 };
 
 struct mount {
-	struct hlist_node mnt_hash;
+	struct hlist_node mnt_hash;                 //链接到hash树
 	struct mount *mnt_parent;
 	struct dentry *mnt_mountpoint;
 	struct vfsmount mnt;

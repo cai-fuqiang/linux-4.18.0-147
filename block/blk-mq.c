@@ -1299,7 +1299,7 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 		 * If we didn't flush the entire list, we could have told
 		 * the driver there was more coming, but that turned out to
 		 * be a lie.
-		 */     //告诉驱动可能会有更多的请求来?
+		 */     //告诉驱动去敲门零
 		if (q->mq_ops->commit_rqs)
 			q->mq_ops->commit_rqs(hctx);
 
@@ -1350,7 +1350,7 @@ bool blk_mq_dispatch_rq_list(struct request_queue *q, struct list_head *list,
 	if (ret == BLK_STS_RESOURCE || ret == BLK_STS_DEV_RESOURCE)
 		return false;
 
-	return (queued + errors) != 0;
+	return (queued + errors) != 0;      //只要是 > 0，就表示有一定的处理能力, 会接着处理
 }
 
 static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
@@ -1399,7 +1399,7 @@ static inline int blk_mq_first_mapped_cpu(struct blk_mq_hw_ctx *hctx)
 {
 	int cpu = cpumask_first_and(hctx->cpumask, cpu_online_mask);
 
-	if (cpu >= nr_cpu_ids)
+	if (cpu >= nr_cpu_ids)                  //所有可处于联机状态的CPU总数
 		cpu = cpumask_first(hctx->cpumask);
 	return cpu;
 }
@@ -2519,7 +2519,7 @@ static void blk_mq_map_swqueue(struct request_queue *q)
 			if (cpumask_test_cpu(i, hctx->cpumask))
 				continue;
 
-			cpumask_set_cpu(i, hctx->cpumask);
+			cpumask_set_cpu(i, hctx->cpumask);          //设置该cpumask
 			hctx->type = j;                             //表示硬件队列的类型
 			ctx->index_hw[hctx->type] = hctx->nr_ctx;   //这个相当于软件队列的对于这个硬件队列的index
 			hctx->ctxs[hctx->nr_ctx++] = ctx;

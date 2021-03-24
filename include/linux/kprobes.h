@@ -185,20 +185,20 @@ struct jprobe {
 struct kretprobe {
 	struct kprobe kp;
 	kretprobe_handler_t handler;
-	kretprobe_handler_t entry_handler;
-	int maxactive;
-	int nmissed;
+	kretprobe_handler_t entry_handler;  //表示为entry_hander
+	int maxactive;                      //同时陷入kretprobe点的最大数目
+	int nmissed;                        //表示因为设置maxactive 丢失的probe的次数
 	size_t data_size;
-	struct hlist_head free_instances;
+	struct hlist_head free_instances;   //空闲的instances
 	raw_spinlock_t lock;
 };
 
 struct kretprobe_instance {
-	struct hlist_node hlist;
+	struct hlist_node hlist;        //用于free_instance链接
 	struct kretprobe *rp;
-	kprobe_opcode_t *ret_addr;
+	kprobe_opcode_t *ret_addr;      //这个时ret指令的地址
 	struct task_struct *task;
-	char data[0];
+	char data[0];                   //这里面的data是私有的
 };
 
 struct kretprobe_blackpoint {
