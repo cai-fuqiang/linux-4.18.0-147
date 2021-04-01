@@ -723,7 +723,7 @@ EXPORT_SYMBOL_GPL(wbc_account_io);
 
 /**
  * inode_congested - test whether an inode is congested
- * @inode: inode to test for congestion (may be NULL)
+ * @inode: inode to test for congestion(阻塞) (may be NULL)
  * @cong_bits: mask of WB_[a]sync_congested bits to test
  *
  * Tests whether @inode is congested.  @cong_bits is the mask of congestion

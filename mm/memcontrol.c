@@ -5747,23 +5747,34 @@ struct cgroup_subsys memory_cgrp_subsys = {
 
 /**
  * mem_cgroup_protected - check if memory consumption is in the normal range
- * @root: the top ancestor of the sub-tree being checked
+ *
+ * 查看内存消费是否在一个normal 区间
+ *
+ * @root: the top ancestor(原始节点) of the sub-tree being checked
  * @memcg: the memory cgroup to check
  *
  * WARNING: This function is not stateless! It can only be used as part
  *          of a top-down tree iteration, not for isolated queries.
- *
+   WARNING: 这个function并不是无状态的. 它仅用于遍历从上而下的tree，而不是独立的查询
+ *  
  * Returns one of the following:
  *   MEMCG_PROT_NONE: cgroup memory is not protected
  *   MEMCG_PROT_LOW: cgroup memory is protected as long there is
  *     an unprotected supply of reclaimable memory from other cgroups.
+ 
+     cgroup memory 只在当有一个为保护的来自于其他cgroups 可回收内存的补给?
+
  *   MEMCG_PROT_MIN: cgroup memory is protected
  *
  * @root is exclusive; it is never protected when looked at directly
+   @root 是排外的; 当我们一旦查看它时，它不在被保护
  *
  * To provide a proper hierarchical behavior, effective memory.min/low values
  * are used. Below is the description of how effective memory.low is calculated.
  * Effective memory.min values is calculated in the same way.
+ *
+ * 为了提供一个适当的递阶行为，请使用有效的memory.min/low.接下来描述怎么取计算
+ * 有效的memory.low. 有效的memory.min也已同样的方式计算。
  *
  * Effective memory.low is always equal or less than the original memory.low.
  * If there is no memory.low overcommittment (which is always true for
@@ -5773,6 +5784,9 @@ struct cgroup_subsys memory_cgrp_subsys = {
  * memory.low usages, where memory.low usage is the size of actually
  * protected memory.
  *
+   有效的memory.low会总是小于等于原来的memory.low. 如果没有memory.low 
+   overcommittment(对于最上层的memory cgroup也适用) 这两个值相等。否则
+
  *                                             low_usage
  * elow = min( memory.low, parent->elow * ------------------ ),
  *                                        siblings_low_usage

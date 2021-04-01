@@ -903,8 +903,7 @@ int add_to_page_cache_locked(struct page *page, struct address_space *mapping,
 		pgoff_t offset, gfp_t gfp_mask)
 {
 	return __add_to_page_cache_locked(page, mapping, offset,
-					  gfp_mask, NULL);
-}
+					  gfp_mask, NULL); }
 EXPORT_SYMBOL(add_to_page_cache_locked);
 
 int add_to_page_cache_lru(struct page *page, struct address_space *mapping,

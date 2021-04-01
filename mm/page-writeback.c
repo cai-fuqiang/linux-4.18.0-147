@@ -1558,6 +1558,13 @@ static inline void wb_dirty_limits(struct dirty_throttle_control *dtc)
  * If we're over `background_thresh' then the writeback threads are woken to
  * perform some writeout.
  */
+
+/*
+ * balance_dirty_pages() 必须在生成dirty data的进程中被调用.它将去观察环境中的
+ * dirty pages的数量，一旦数量超过(background_thresh + dirty_thresh) / 2将会使
+ * 调用者等待。如果我们超过了'background_thresh'  writeback threads将会被唤醒
+ * 来执行一些writeout 的操作
+ */
 static void balance_dirty_pages(struct bdi_writeback *wb,
 				unsigned long pages_dirtied)
 {

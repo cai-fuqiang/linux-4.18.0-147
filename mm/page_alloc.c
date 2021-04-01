@@ -2827,7 +2827,7 @@ void free_unref_page_list(struct list_head *list)
 
 	/* Prepare pages for freeing */
 	list_for_each_entry_safe(page, next, list, lru) {
-		pfn = page_to_pfn(page);
+		pfn = page_to_pfn(page);    //页框
 		if (!free_unref_page_prepare(page, pfn))
 			list_del(&page->lru);
 		set_page_private(page, pfn);
@@ -2839,7 +2839,7 @@ void free_unref_page_list(struct list_head *list)
 
 		set_page_private(page, 0);
 		trace_mm_page_free_batched(page);
-		free_unref_page_commit(page, pfn);
+		free_unref_page_commit(page, pfn);  //释放一个页
 
 		/*
 		 * Guard against excessive IRQ disabled times when we get

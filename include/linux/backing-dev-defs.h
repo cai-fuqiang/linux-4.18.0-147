@@ -87,20 +87,20 @@ struct bdi_writeback_congested {
 };
 
 /*
- * Each wb (bdi_writeback) can perform writeback operations, is measured
- * and throttled, independently.  Without cgroup writeback, each bdi
- * (bdi_writeback) is served by its embedded bdi->wb.
+ * Each wb (bdi_writeback) can perform writeback operations, is measured(有规则的?)
+ * and throttled(?), independently(独立的).  Without cgroup writeback, each bdi
+ * (bdi_writeback) is served by its embedded(内置的) bdi->wb.
  *
- * On the default hierarchy, blkcg implicitly enables memcg.  This allows
- * using memcg's page ownership for attributing writeback IOs, and every
+ * On the default hierarchy(层级), blkcg implicitly(暗中地) enables memcg.  This allows
+ * using memcg's page ownership(所有权) for attributing writeback IOs, and every
  * memcg - blkcg combination can be served by its own wb by assigning a
- * dedicated wb to each memcg, which enables isolation across different
+ * dedicated(专用的) wb to each memcg, which enables isolation across different
  * cgroups and propagation of IO back pressure down from the IO layer upto
  * the tasks which are generating the dirty pages to be written back.
  *
  * A cgroup wb is indexed on its bdi by the ID of the associated memcg,
  * refcounted with the number of inodes attached to it, and pins the memcg
- * and the corresponding blkcg.  As the corresponding blkcg for a memcg may
+ * and the corresponding(相对应的) blkcg.  As the corresponding blkcg for a memcg may
  * change as blkcg is disabled and enabled higher up in the hierarchy, a wb
  * is tested for blkcg after lookup and removed from index on mismatch so
  * that a new wb for the combination can be created.

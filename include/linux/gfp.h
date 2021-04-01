@@ -119,7 +119,7 @@ struct vm_area_struct;
  * __GFP_IO can start physical IO.
  *
  * __GFP_FS can call down to the low-level FS. Clearing the flag avoids the
- *   allocator recursing into the filesystem which might already be holding
+ *   allocator recursing(循环) into the filesystem which might already be holding
  *   locks.
  *
  * __GFP_DIRECT_RECLAIM indicates that the caller may enter direct reclaim.

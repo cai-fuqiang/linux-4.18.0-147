@@ -590,13 +590,13 @@ static inline bool zone_intersects(struct zone *zone,
 #define MAX_ZONES_PER_ZONELIST (MAX_NUMNODES * MAX_NR_ZONES)
 
 enum {
-	ZONELIST_FALLBACK,	/* zonelist with fallback */
+	ZONELIST_FALLBACK,	/* zonelist with fallback */        //退路，对于UMA都是退路
 #ifdef CONFIG_NUMA
 	/*
 	 * The NUMA zonelists are doubled because we need zonelists that
 	 * restrict the allocations to a single node for __GFP_THISNODE.
 	 */
-	ZONELIST_NOFALLBACK,	/* zonelist without fallback (__GFP_THISNODE) */
+	ZONELIST_NOFALLBACK,	/* zonelist without fallback (__GFP_THISNODE) */    //NUMA架构独有的
 #endif
 	MAX_ZONELISTS
 };

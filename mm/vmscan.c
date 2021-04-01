@@ -233,9 +233,9 @@ static bool global_reclaim(struct scan_control *sc)
  *
  * The normal page dirty throttling mechanism in balance_dirty_pages() is
  * completely broken with the legacy memcg and direct stalling in
- * shrink_page_list() is used for throttling instead, which lacks all the
- * niceties such as fairness, adaptive pausing, bandwidth proportional
- * allocation and configurability.
+ * shrink_page_list() is used for throttling instead, which lacks(缺乏) all the
+ * niceties(细节) such as fairness, adaptive pausing(自适应的停止), bandwidth(带宽) proportional(成比例的)
+ * allocation and configurability(可配置的).
  *
  * This function tests whether the vmscan currently in progress can assume
  * that the normal dirty throttling mechanism is operational.
@@ -247,8 +247,8 @@ static bool sane_reclaim(struct scan_control *sc)
 	if (!memcg)
 		return true;
 #ifdef CONFIG_CGROUP_WRITEBACK
-	if (cgroup_subsys_on_dfl(memory_cgrp_subsys))
-		return true;
+	if (cgroup_subsys_on_dfl(memory_cgrp_subsys))   //这个应该是看vi还是v2
+		return true;                                //v1的话则返回true
 #endif
 	return false;
 }
@@ -839,7 +839,8 @@ static pageout_t pageout(struct page *page, struct address_space *mapping,
 			.for_reclaim = 1,
 		};
 
-		SetPageReclaim(page);
+		SetPageReclaim(page);       //要尽快收回
+        //调用writepage  这个时候 已经进行writepage操作了
 		res = mapping->a_ops->writepage(page, &wbc);
 		if (res < 0)
 			handle_write_error(mapping, page, res);
@@ -1106,7 +1107,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 	cond_resched();
 
-	while (!list_empty(page_list)) {
+	while (!list_empty(page_list)) {    //针对page_list的每个页
 		struct address_space *mapping;
 		struct page *page;
 		int may_enter_fs;
@@ -1115,75 +1116,77 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 		cond_resched();
 
-		page = lru_to_page(page_list);
+		page = lru_to_page(page_list);  //找到page结构
 		list_del(&page->lru);
 
-		if (!trylock_page(page))
+		if (!trylock_page(page))        //如果已经lock
 			goto keep;
 
-		VM_BUG_ON_PAGE(PageActive(page), page);
+		VM_BUG_ON_PAGE(PageActive(page), page); //这个page不可以是Active
 
-		sc->nr_scanned++;
+		sc->nr_scanned++;                       //增加sc->nr_scanned
 
-		if (unlikely(!page_evictable(page)))
+		if (unlikely(!page_evictable(page)))    //如果不是evictable
 			goto activate_locked;
 
-		if (!sc->may_unmap && page_mapped(page))
+        //如果没有设置unmap 但是page已经是mapped状态
+		if (!sc->may_unmap && page_mapped(page))    
 			goto keep_locked;
 
-		/* Double the slab pressure for mapped and swapcache pages */
+		/* Double the slab pressure(压力) for mapped and swapcache pages */
 		if ((page_mapped(page) || PageSwapCache(page)) &&
 		    !(PageAnon(page) && !PageSwapBacked(page)))
-			sc->nr_scanned++;
+			sc->nr_scanned++;                   //增加sc->nr_scanned
 
 		may_enter_fs = (sc->gfp_mask & __GFP_FS) ||
 			(PageSwapCache(page) && (sc->gfp_mask & __GFP_IO));
 
 		/*
-		 * The number of dirty pages determines if a node is marked
+		 * The number of dirty pages determines(决定) if a node is marked
 		 * reclaim_congested which affects wait_iff_congested. kswapd
 		 * will stall and start writing pages if the tail of the LRU
 		 * is all dirty unqueued pages.
-		 */
+		 */     //?????????!!!!!!!!!!!!!!
+        //查看是否dirty，是否writeback
 		page_check_dirty_writeback(page, &dirty, &writeback);
-		if (dirty || writeback)
-			nr_dirty++;
+		if (dirty || writeback)     //如果其中一个有
+			nr_dirty++;             //则说明是writeback
 
-		if (dirty && !writeback)
-			nr_unqueued_dirty++;
+		if (dirty && !writeback)    //如果是dirty 但是不是writeback
+			nr_unqueued_dirty++;    //增加这个
 
 		/*
-		 * Treat this page as congested if the underlying BDI is or if
+		 * Treat this page as congested(阻塞的) if the underlying BDI is or if
 		 * pages are cycling through the LRU so quickly that the
 		 * pages marked for immediate reclaim are making it to the
 		 * end of the LRU a second time.
 		 */
 		mapping = page_mapping(page);
 		if (((dirty || writeback) && mapping &&
-		     inode_write_congested(mapping->host)) ||
+		     inode_write_congested(mapping->host)) ||   //如果是阻塞的
 		    (writeback && PageReclaim(page)))
-			nr_congested++;
+			nr_congested++;                             //增加阻塞的技术
 
 		/*
 		 * If a page at the tail of the LRU is under writeback, there
 		 * are three cases to consider.
 		 *
-		 * 1) If reclaim is encountering an excessive number of pages
+		 * 1) If reclaim is encountering an excessive(过多的) number of pages
 		 *    under writeback and this page is both under writeback and
-		 *    PageReclaim then it indicates that pages are being queued
-		 *    for IO but are being recycled through the LRU before the
-		 *    IO can complete. Waiting on the page itself risks an
-		 *    indefinite stall if it is impossible to writeback the
+		 *    PageReclaim(回收?) then it indicates(表明) that pages are being queued
+		 *    for IO but are being recycled(回收) through the LRU before the
+		 *    IO can complete. Waiting on the page itself risks(冒...风险) an
+		 *    indefinite(不确定的) stall(停顿) if it is impossible to writeback the 
 		 *    page due to IO error or disconnected storage so instead
 		 *    note that the LRU is being scanned too quickly and the
-		 *    caller can stall after page list has been processed.
+		 *    caller can stall(停顿) after page list has been processed.
 		 *
-		 * 2) Global or new memcg reclaim encounters a page that is
+		 *   2) Global or new memcg reclaim encounters(遭遇) a page that is
 		 *    not marked for immediate reclaim, or the caller does not
 		 *    have __GFP_FS (or __GFP_IO if it's simply going to swap,
 		 *    not to fs). In this case mark the page for immediate
 		 *    reclaim and continue scanning.
-		 *
+		 *    //这个会即将释放么
 		 *    Require may_enter_fs because we would wait on fs, which
 		 *    may not have submitted IO yet. And the loop driver might
 		 *    enter reclaim, and deadlock if it waits on a page for
@@ -1191,22 +1194,23 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 *    __GFP_IO|__GFP_FS for this reason); but more thought
 		 *    would probably show more reasons.
 		 *
-		 * 3) Legacy memcg encounters a page that is already marked
+		 * 3) Legacy memcg encountes a page that is already marked
 		 *    PageReclaim. memcg does not have any dirty pages
-		 *    throttling so we could easily OOM just because too many
+		 *    throttling(限制) so we could easily OOM just because too many
 		 *    pages are in writeback and there is nothing else to
 		 *    reclaim. Wait for the writeback to complete.
 		 *
 		 * In cases 1) and 2) we activate the pages to get them out of
 		 * the way while we continue scanning for clean pages on the
 		 * inactive list and refilling from the active list. The
-		 * observation here is that waiting for disk writes is more
+		 * observation(观测，观察) here is that waiting for disk writes is more
 		 * expensive than potentially causing reloads down the line.
 		 * Since they're marked for immediate reclaim, they won't put
 		 * memory pressure on the cache working set any longer than it
 		 * takes to write them to disk.
 		 */
-		if (PageWriteback(page)) {
+        //commit 283aba9f9e0e4882bf09bd37a2983379a6fae805
+		if (PageWriteback(page)) {  //表明正在回写
 			/* Case 1 above */
 			if (current_is_kswapd() &&
 			    PageReclaim(page) &&
@@ -1228,21 +1232,25 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 				 * then wait_on_page_writeback() to avoid OOM;
 				 * and it's also appropriate in global reclaim.
 				 */
-				SetPageReclaim(page);
+				SetPageReclaim(page);                   //设置页面为 _GFP_RECAIM
 				nr_writeback++;
 				goto activate_locked;
 
 			/* Case 3 above */
-			} else {
+			} else {        //mark _GFP_RECAIM
 				unlock_page(page);
+                /*
+                 * commit e62e384e9da8d9a0c599795464a7e76fd490931c
+                 */
 				wait_on_page_writeback(page);
 				/* then go back and try same page again */
-				list_add_tail(&page->lru, page_list);
+				list_add_tail(&page->lru, page_list);   //将其送回，再尝试一次
 				continue;
 			}
 		}
-
+        //到这里实际上已经不是writeback的page了
 		if (!force_reclaim)
+            //查看是否最近被访问过,返回处理方式
 			references = page_check_references(page, sc);
 
 		switch (references) {
@@ -1308,18 +1316,18 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 * The page is mapped into the page tables of one or more
 		 * processes. Try to unmap it here.
 		 */
-		if (page_mapped(page)) {
+		if (page_mapped(page)) {        //如果页面已经映射
 			enum ttu_flags flags = ttu_flags | TTU_BATCH_FLUSH;
 
 			if (unlikely(PageTransHuge(page)))
 				flags |= TTU_SPLIT_HUGE_PMD;
-			if (!try_to_unmap(page, flags)) {
+			if (!try_to_unmap(page, flags)) {       //尝试ummap
 				nr_unmap_fail++;
 				goto activate_locked;
 			}
 		}
 
-		if (PageDirty(page)) {
+		if (PageDirty(page)) {                      //如果是dirty页，但是没有回写
 			/*
 			 * Only kswapd can writeback filesystem pages
 			 * to avoid risk of stack overflow. But avoid
@@ -1340,7 +1348,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 				 * and know it's dirty
 				 */
 				inc_node_page_state(page, NR_VMSCAN_IMMEDIATE);
-				SetPageReclaim(page);
+				SetPageReclaim(page);               //设置为page reclaim
 
 				goto activate_locked;
 			}
@@ -1358,7 +1366,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			 * starts and then write it out here.
 			 */
 			try_to_unmap_flush_dirty();
-			switch (pageout(page, mapping, sc)) {
+			switch (pageout(page, mapping, sc)) {   //进行pageout
 			case PAGE_KEEP:
 				goto keep_locked;
 			case PAGE_ACTIVATE:
@@ -1451,7 +1459,7 @@ free_it:
 			mem_cgroup_uncharge(page);
 			(*get_compound_page_dtor(page))(page);
 		} else
-			list_add(&page->lru, &free_pages);
+			list_add(&page->lru, &free_pages);  //加入到临时链表free_pages
 		continue;
 
 activate_locked:
@@ -1468,7 +1476,7 @@ activate_locked:
 keep_locked:
 		unlock_page(page);
 keep:
-		list_add(&page->lru, &ret_pages);
+		list_add(&page->lru, &ret_pages);   //移动到ret_pages LIST
 		VM_BUG_ON_PAGE(PageLRU(page) || PageUnevictable(page), page);
 	}
 
@@ -1476,7 +1484,7 @@ keep:
 	try_to_unmap_flush();
 	free_unref_page_list(&free_pages);
 
-	list_splice(&ret_pages, page_list);
+	list_splice(&ret_pages, page_list);             //加入ret_pages
 	count_vm_events(PGACTIVATE, pgactivate);
 
 	if (stat) {
@@ -1534,7 +1542,7 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 	int ret = -EINVAL;
 
 	/* Only take pages on the LRU. */
-	if (!PageLRU(page))
+	if (!PageLRU(page)) //不在LRU内?
 		return ret;
 
 	/* Compaction should not handle unevictable pages but CMA can do so */
@@ -1544,9 +1552,10 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 	ret = -EBUSY;
 
 	/*
-	 * To minimise LRU disruption, the caller can indicate that it only
+	 * To minimise(最小值) LRU disruption(中断、扰乱), the caller can 
+     * indicate(指出，预示) that it only
 	 * wants to isolate pages it will be able to operate on without
-	 * blocking - clean pages for the most part.
+	 * blocking(阻塞) - clean pages for the most part.
 	 *
 	 * ISOLATE_ASYNC_MIGRATE is used to indicate that it only wants to pages
 	 * that it is possible to migrate without blocking
@@ -1583,7 +1592,7 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 	if ((mode & ISOLATE_UNMAPPED) && page_mapped(page))
 		return ret;
 
-	if (likely(get_page_unless_zero(page))) {
+	if (likely(get_page_unless_zero(page))) {   //对于cgroup回收, 只有这一种情况，页面被占用
 		/*
 		 * Be careful not to clear PageLRU until after we're
 		 * sure the page is not being freed elsewhere -- the
@@ -1619,21 +1628,21 @@ static __always_inline void update_lru_sizes(struct lruvec *lruvec,
 }
 
 /*
- * zone_lru_lock is heavily contended.  Some of the functions that
+ * zone_lru_lock is heavily contended(争用).  Some of the functions that
  * shrink the lists perform better by taking out a batch of pages
  * and working on them outside the LRU lock.
  *
  * For pagecache intensive workloads, this function is the hottest
  * spot in the kernel (apart from copy_*_user functions).
  *
- * Appropriate locks must be held before calling this function.
+ * Appropriate(合适的) locks must be held before calling this function.
  *
- * @nr_to_scan:	The number of eligible pages to look through on the list.
+ * @nr_to_scan:	The number of eligible(合适的) pages to look through on the list.
  * @lruvec:	The LRU vector to pull pages from.
  * @dst:	The temp list to put pages on to.
  * @nr_scanned:	The number of pages that were scanned.
  * @sc:		The scan_control struct for this reclaim session
- * @mode:	One of the LRU isolation modes
+ * @mode:	One of the LRU isolation(隔离) modes
  * @lru:	LRU list id for isolating
  *
  * returns how many pages were moved onto *@dst.
@@ -1653,39 +1662,41 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 
 	scan = 0;
 	for (total_scan = 0;
+        //这里之所以取得nr_taken是为了大页
 	     scan < nr_to_scan && nr_taken < nr_to_scan && !list_empty(src);
 	     total_scan++) {
 		struct page *page;
 
-		page = lru_to_page(src);
-		prefetchw_prev_lru_page(page, src, flags);
+		page = lru_to_page(src);        //找出第一个
+		prefetchw_prev_lru_page(page, src, flags);  //预读page -> priv -> flags ?
 
 		VM_BUG_ON_PAGE(!PageLRU(page), page);
-
-		if (page_zonenum(page) > sc->reclaim_idx) {
-			list_move(&page->lru, &pages_skipped);
-			nr_skipped[page_zonenum(page)]++;
+        //这个sc->reclaim_idx代表当前highest isolate zone num
+		if (page_zonenum(page) > sc->reclaim_idx) { //查看属于哪个zone
+			list_move(&page->lru, &pages_skipped);  //移动到pages_skipped
+			nr_skipped[page_zonenum(page)]++;       //跳过
 			continue;
 		}
 
 		/*
 		 * Do not count skipped pages because that makes the function
 		 * return with no isolated pages if the LRU mostly contains
-		 * ineligible pages.  This causes the VM to not reclaim any
-		 * pages, triggering a premature OOM.
+		 * ineligible(不合格的，没有资格的) pages.  This causes the VM 
+         * to not reclaim any pages, triggering(触发) a premature(比预期早的)
+         * OOM.
 		 */
-		scan++;
+		scan++;         //扫描数
 		switch (__isolate_lru_page(page, mode)) {
 		case 0:
-			nr_pages = hpage_nr_pages(page);
-			nr_taken += nr_pages;
-			nr_zone_taken[page_zonenum(page)] += nr_pages;
-			list_move(&page->lru, dst);
+			nr_pages = hpage_nr_pages(page);    //看看是不是大页，不是大页则返回一页
+			nr_taken += nr_pages;               //获取的nr_take
+			nr_zone_taken[page_zonenum(page)] += nr_pages;  //获取了多少?
+			list_move(&page->lru, dst);         //移动page->lru ==> dst
 			break;
 
 		case -EBUSY:
 			/* else it is being freed elsewhere */
-			list_move(&page->lru, src);
+			list_move(&page->lru, src);         //如果是busy，则移动回lru
 			continue;
 
 		default:
@@ -1695,10 +1706,10 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 
 	/*
 	 * Splice any skipped pages to the start of the LRU list. Note that
-	 * this disrupts the LRU order when reclaiming for lower zones but
+	 * this disrupts(使..紊乱..打乱) the LRU order when reclaiming for lower zones but
 	 * we cannot splice to the tail. If we did then the SWAP_CLUSTER_MAX
 	 * scanning would soon rescan the same pages to skip and put the
-	 * system at risk of premature OOM.
+	 * system at risk(风险) of premature(比预期早的) OOM.
 	 */
 	if (!list_empty(&pages_skipped)) {
 		int zid;
@@ -1707,7 +1718,7 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 		for (zid = 0; zid < MAX_NR_ZONES; zid++) {
 			if (!nr_skipped[zid])
 				continue;
-
+            //这里的skip实际上是因为策略问题
 			__count_zid_vm_events(PGSCAN_SKIP, zid, nr_skipped[zid]);
 			skipped += nr_skipped[zid];
 		}
@@ -1883,7 +1894,7 @@ static noinline_for_stack unsigned long
 shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 		     struct scan_control *sc, enum lru_list lru)
 {
-	LIST_HEAD(page_list);
+	LIST_HEAD(page_list);               //初始化一个page_list
 	unsigned long nr_scanned;
 	unsigned long nr_reclaimed = 0;
 	unsigned long nr_taken;
@@ -1909,13 +1920,14 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 
 	lru_add_drain();
 
-	if (!sc->may_unmap)
+	if (!sc->may_unmap)             //如果不进行unmap，则分离unmapped的页面
 		isolate_mode |= ISOLATE_UNMAPPED;
 
 	spin_lock_irq(&pgdat->lru_lock);
 
+    //nr_scanned， 在整个扫描过程中一共扫描了多少
 	nr_taken = isolate_lru_pages(nr_to_scan, lruvec, &page_list,
-				     &nr_scanned, sc, isolate_mode, lru);
+				     &nr_scanned, sc, isolate_mode, lru);   //获取了多少lru_pages
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
 	reclaim_stat->recent_scanned[file] += nr_taken;
@@ -1931,11 +1943,11 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 		count_memcg_events(lruvec_memcg(lruvec), PGSCAN_DIRECT,
 				   nr_scanned);
 	}
-	spin_unlock_irq(&pgdat->lru_lock);
+	spin_unlock_irq(&pgdat->lru_lock);  //把这个给锁了， 现在释放锁
 
 	if (nr_taken == 0)
 		return 0;
-
+    //对page_list进行扫描，找到合适的free页面
 	nr_reclaimed = shrink_page_list(&page_list, pgdat, sc, 0,
 				&stat, false);
 
@@ -1953,7 +1965,8 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 				   nr_reclaimed);
 	}
 
-	putback_inactive_pages(lruvec, &page_list);
+    //将pagelist 的剩余页面按照page类型返回到lru
+	putback_inactive_pages(lruvec, &page_list); 
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, -nr_taken);
 
@@ -1975,7 +1988,8 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	 */
 	if (stat.nr_unqueued_dirty == nr_taken)
 		wakeup_flusher_threads(WB_REASON_VMSCAN);
-
+    
+    //进行一些统计
 	sc->nr.dirty += stat.nr_dirty;
 	sc->nr.congested += stat.nr_congested;
 	sc->nr.unqueued_dirty += stat.nr_unqueued_dirty;
@@ -2241,9 +2255,9 @@ static unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
 				 struct lruvec *lruvec, struct mem_cgroup *memcg,
 				 struct scan_control *sc)
 {
-	if (is_active_lru(lru)) {
+	if (is_active_lru(lru)) {   //如果使活跃的LRU
 		if (inactive_list_is_low(lruvec, is_file_lru(lru),
-					 memcg, sc, true))
+					 memcg, sc, true))  //会进一步判断ACTIVE LRU LIST是否被扫描
 			shrink_active_list(nr_to_scan, lruvec, sc, lru);
 		return 0;
 	}
@@ -2271,7 +2285,7 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 			   struct scan_control *sc, unsigned long *nr,
 			   unsigned long *lru_pages)
 {
-	int swappiness = mem_cgroup_swappiness(memcg);
+	int swappiness = mem_cgroup_swappiness(memcg);      //cgroup  v1 有swappiness
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
 	u64 fraction[2];
 	u64 denominator = 0;	/* gcc */
@@ -2283,6 +2297,7 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	enum lru_list lru;
 
 	/* If we have no swap space, do not bother scanning anon pages. */
+    /* 如果没有swap space, 不必麻烦扫描一次anon pages */
 	if (!sc->may_swap || mem_cgroup_get_nr_swap_pages(memcg) <= 0) {
 		scan_balance = SCAN_FILE;
 		goto out;
@@ -2319,6 +2334,11 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	 * thrashing file LRU becomes infinitely more attractive than
 	 * anon pages.  Try to detect this based on file LRU size.
 	 */
+    /*
+     * 防止回收者陷入cache trap:
+     * cache pages 开始inactive, 每一个cache fault 将会让扫描平衡
+     * 向着file LRU倾斜.当file LRU回收,
+     */
 	if (global_reclaim(sc)) {
 		unsigned long pgdatfile;
 		unsigned long pgdatfree;
@@ -2426,14 +2446,17 @@ out:
 		unsigned long size;
 		unsigned long scan;
 
-		size = lruvec_lru_size(lruvec, lru, sc->reclaim_idx);
+		size = lruvec_lru_size(lruvec, lru, sc->reclaim_idx);   //获取reclaim_idx的 lru size
 		scan = size >> sc->priority;
 		/*
 		 * If the cgroup's already been deleted, make sure to
 		 * scrape out the remaining cache.
 		 */
-		if (!scan && !mem_cgroup_online(memcg))
-			scan = min(size, SWAP_CLUSTER_MAX);
+        /*
+         * 如果cgroup已经被删除了，确保刷除仍然存在的cache
+         */
+		if (!scan && !mem_cgroup_online(memcg))     //如果是0，同时memcgroup OFFLINE
+			scan = min(size, SWAP_CLUSTER_MAX);     //size 和 SWAP_CLUSTER_MAX取最小的
 
 		switch (scan_balance) {
 		case SCAN_EQUAL:
@@ -2462,8 +2485,8 @@ out:
 			BUG();
 		}
 
-		*lru_pages += size;
-		nr[lru] = scan;
+		*lru_pages += size;     //size (页面总数) 到 lru_pages传出
+		nr[lru] = scan;         //nr[lru] 扫描次数
 	}
 }
 
@@ -2483,7 +2506,7 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 	struct blk_plug plug;
 	bool scan_adjusted;
 
-	get_scan_count(lruvec, memcg, sc, nr, lru_pages);
+	get_scan_count(lruvec, memcg, sc, nr, lru_pages);   //确认各个LRU扫描的页面数
 
 	/* Record the original scan target for proportional adjustments later */
 	memcpy(targets, nr, sizeof(nr));
@@ -2509,11 +2532,13 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 		unsigned long nr_scanned;
 
 		for_each_evictable_lru(lru) {
-			if (nr[lru]) {
+			if (nr[lru]) {  
+                //最多扫描32个页面
 				nr_to_scan = min(nr[lru], SWAP_CLUSTER_MAX);
 				nr[lru] -= nr_to_scan;
 
-				nr_reclaimed += shrink_list(lru, nr_to_scan,
+                //调用shrink_list进行内存回收
+				nr_reclaimed += shrink_list(lru, nr_to_scan,    
 							    lruvec, memcg, sc);
 			}
 		}
@@ -2729,11 +2754,12 @@ static bool shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 			reclaimed = sc->nr_reclaimed;
 			scanned = sc->nr_scanned;
 			shrink_node_memcg(pgdat, memcg, sc, &lru_pages);
-			node_lru_pages += lru_pages;
+			node_lru_page += lru_pages;
 
 			shrink_slab(sc->gfp_mask, pgdat->node_id,
 				    memcg, sc->priority);
-
+            
+            //更新回收时的扫描和已回收的页面数
 			/* Record the group's reclaim efficiency */
 			vmpressure(sc->gfp_mask, memcg, false,
 				   sc->nr_scanned - scanned,
@@ -2749,6 +2775,7 @@ static bool shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 			 * retry with decreasing priority if one round over the
 			 * whole hierarchy is not sufficient.
 			 */
+            //回收的页面达到标准则跳出循环
 			if (!global_reclaim(sc) &&
 					sc->nr_reclaimed >= sc->nr_to_reclaim) {
 				mem_cgroup_iter_break(root, memcg);
@@ -2764,7 +2791,7 @@ static bool shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 		/* Record the subtree's reclaim efficiency */
 		vmpressure(sc->gfp_mask, sc->target_mem_cgroup, true,
 			   sc->nr_scanned - nr_scanned,
-			   sc->nr_reclaimed - nr_reclaimed);
+			   sc->nr_reclaimed - nr_reclaimed);    //可能会唤醒lmkd
 
 		if (sc->nr_reclaimed - nr_reclaimed)
 			reclaimable = true;
@@ -3293,7 +3320,7 @@ unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 		.reclaim_idx = MAX_NR_ZONES - 1,
 		.target_mem_cgroup = memcg,
 		.priority = DEF_PRIORITY,
-		.may_writepage = !laptop_mode,
+		.may_writepage = !laptop_mode,  //这个会为1
 		.may_unmap = 1,
 		.may_swap = may_swap,
 	};
