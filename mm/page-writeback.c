@@ -106,6 +106,9 @@ EXPORT_SYMBOL_GPL(dirty_writeback_interval);
 /*
  * The longest time for which data is allowed to remain dirty
  */
+/*
+ * 数据被允许保持dirty的最长时间
+ */
 unsigned int dirty_expire_interval = 30 * 100; /* centiseconds */
 
 /*

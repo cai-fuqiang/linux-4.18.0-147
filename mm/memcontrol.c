@@ -5786,6 +5786,8 @@ struct cgroup_subsys memory_cgrp_subsys = {
  *
    有效的memory.low会总是小于等于原来的memory.low. 如果没有memory.low 
    overcommittment(对于最上层的memory cgroup也适用) 这两个值相等。否则
+   他是parent 有效的 memory.low的一部分, 该部分使用memory.low usage /
+   sibling's memory.low usages, 
 
  *                                             low_usage
  * elow = min( memory.low, parent->elow * ------------------ ),

@@ -111,7 +111,7 @@ struct bdi_writeback {
 	unsigned long state;		/* Always use atomic bitops on this */
 	unsigned long last_old_flush;	/* last old data flush */
 
-	struct list_head b_dirty;	/* dirty inodes */
+	struct list_head b_dirty;	/* dirty inodes */              /* 需要处理的inode */
 	struct list_head b_io;		/* parked for writeback */
 	struct list_head b_more_io;	/* parked for more writeback */
 	struct list_head b_dirty_time;	/* time stamps are dirty */
@@ -141,7 +141,7 @@ struct bdi_writeback {
 	enum wb_reason start_all_reason;
 
 	spinlock_t work_lock;		/* protects work_list & dwork scheduling */
-	struct list_head work_list;
+	struct list_head work_list; //work链
 	struct delayed_work dwork;	/* work item used for writeback */
 
 	unsigned long dirty_sleep;	/* last wait */
@@ -169,7 +169,7 @@ struct bdi_writeback {
 };
 
 struct backing_dev_info {
-	struct list_head bdi_list;
+	struct list_head bdi_list;  //串起所有的backing_dev_info实例
 	unsigned long ra_pages;	/* max readahead in PAGE_SIZE units */
 	unsigned long io_pages;	/* max allowed IO size */
 	congested_fn *congested_fn; /* Function pointer if device is md/dm */

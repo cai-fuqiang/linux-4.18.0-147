@@ -824,7 +824,7 @@ static bool invalid_page_referenced_vma(struct vm_area_struct *vma, void *arg)
 }
 
 /**
- * page_referenced - test if the page was referenced
+ * page_referenced - test if the page was referenced    //有没有被最近访问
  * @page: the page to test
  * @is_locked: caller holds lock on the page
  * @memcg: target memory cgroup

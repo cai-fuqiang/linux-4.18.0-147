@@ -2036,22 +2036,41 @@ static inline void init_sync_kiocb(struct kiocb *kiocb, struct file *filp)
 /*
  * Inode state bits.  Protected by inode->i_lock
  *
+ * Inode 状态位，受inode->i_lock保护
+ *
  * Three bits determine the dirty state of the inode, I_DIRTY_SYNC,
  * I_DIRTY_DATASYNC and I_DIRTY_PAGES.
+ *
+ * 有三位确定了inode 的dirty state: I_DIRTY_SYNC, I_DIRTY_DATASYNC, 
+ * I_DIRTY_PAGES
  *
  * Four bits define the lifetime of an inode.  Initially, inodes are I_NEW,
  * until that flag is cleared.  I_WILL_FREE, I_FREEING and I_CLEAR are set at
  * various stages of removing an inode.
  *
+ * 有四位定义了inode的lifetime. 最初是: I_NEW, 接下来该位被清除。 I_WILL_FREE，
+ * I_FREEING和I_CLEAN在删除一个inode的不同阶段会被设置
+ *
  * Two bits are used for locking and completion notification, I_NEW and I_SYNC.
+ *
+ * 有两位用来locking和completion notification: I_NEW和I_SYNC
  *
  * I_DIRTY_SYNC		Inode is dirty, but doesn't have to be written on
  *			fdatasync().  i_atime is the usual cause.
+ *			        当inode 是dirty状态的时候, 不需要调用fdatasync()执行
+ *			        一些写操作(这个指的是元数据), i_atime是一个通常的例子
+ *
  * I_DIRTY_DATASYNC	Data-related inode changes pending. We keep track of
  *			these changes separately from I_DIRTY_SYNC so that we
  *			don't have to write inode on fdatasync() when only
  *			mtime has changed in it.
+ *			        data-related  inode 等待变更。我们特意持续跟踪这些
+ *			        来自于I_DIRTY_SYNC的changes，所以我们不需要调用
+ *			        fdatasync()去写inode当我们只修改mtime时。
+ *
  * I_DIRTY_PAGES	Inode has dirty pages.  Inode itself may be clean.
+ *                  Inode 有脏页. 但是Inode 自己可能是干净的
+ *
  * I_NEW		Serves as both a mutex and completion notification.
  *			New inodes set I_NEW.  If two processes both create
  *			the same inode, one of them will release its inode and
@@ -2079,6 +2098,8 @@ static inline void init_sync_kiocb(struct kiocb *kiocb, struct file *filp)
  *			data writeback, and cleared with a wakeup on the bit
  *			address once it is done. The bit is also used to pin
  *			the inode in memory for flusher thread.
+ *              对于inode的writeback已经running，当data 执行writeback
+ *              时该bit位已经设置，当执行完成时该位被clean.
  *
  * I_REFERENCED		Marks the inode as recently references on the LRU list.
  *

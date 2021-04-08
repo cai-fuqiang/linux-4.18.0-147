@@ -484,11 +484,12 @@ ENTRY(kimage_vaddr)
  * Returns either BOOT_CPU_MODE_EL1 or BOOT_CPU_MODE_EL2 in w0 if
  * booted in EL1 or EL2 respectively.
  */
-ENTRY(el2_setup)
+ENTRY(el2_setup)                                
 	msr	SPsel, #1			// We want to use SP_EL{1,2}
 	mrs	x0, CurrentEL
-	cmp	x0, #CurrentEL_EL2
-	b.eq	1f
+	cmp	x0, #CurrentEL_EL2                          //判断是否是el2
+    //也就说el2才走下面的流程，el1就不走了
+	b.eq	1f                                      //是el2跳转到1f
 	mov_q	x0, (SCTLR_EL1_RES1 | ENDIAN_SET_EL1)
 	msr	sctlr_el1, x0
 	mov	w0, #BOOT_CPU_MODE_EL1		// This cpu booted in EL1
@@ -504,18 +505,20 @@ ENTRY(el2_setup)
 	 * x2 being non-zero indicates that we do have VHE, and that the
 	 * kernel is intended to run at EL2.
 	 */
-	mrs	x2, id_aa64mmfr1_el1
-	ubfx	x2, x2, #8, #4
+	mrs	x2, id_aa64mmfr1_el1        //查看id_aa64mmfr1_el1寄存器存储到x2
+	ubfx	x2, x2, #8, #4          //从x2寄存器8位开始，提取4位到x2寄存器
 #else
 	mov	x2, xzr
 #endif
 
 	/* Hyp configuration. */
-	mov_q	x0, HCR_HOST_NVHE_FLAGS
-	cbz	x2, set_hcr
-	mov_q	x0, HCR_HOST_VHE_FLAGS
+	mov_q	x0, HCR_HOST_NVHE_FLAGS //以到x0
+    //为0跳转 跳转代表el1，这里做这些实际上是为了drop to el1
+	cbz	x2, set_hcr                 
+	mov_q	x0, HCR_HOST_VHE_FLAGS  //(HCR_RW | HCR_TGE | HCR_E2H)
 set_hcr:
-	msr	hcr_el2, x0
+    //在这里设置hcr_el2,也就是这个寄存器在kernel中是software设置的
+	msr	hcr_el2, x0                 
 	isb
 
 	/*
@@ -528,7 +531,7 @@ set_hcr:
 	 * to transparently mess with the EL0 bits via CNTKCTL_EL1 access in
 	 * EL2.
 	 */
-	cbnz	x2, 1f
+	cbnz	x2, 1f              //非0跳转, 也就是el2跳转
 	mrs	x0, cnthctl_el2
 	orr	x0, x0, #3			// Enable EL1 physical timers
 	msr	cnthctl_el2, x0
@@ -591,6 +594,7 @@ set_hcr:
 6:						// For VHE, use EL2 translation
 	orr	x3, x3, #MDCR_EL2_TPMS		// and disable access from EL1
 7:
+    //设置mdcr_el2
 	msr	mdcr_el2, x3			// Configure debug traps
 
 	/* LORegions */
@@ -603,9 +607,9 @@ set_hcr:
 	/* Stage-2 translation */
 	msr	vttbr_el2, xzr
 
-	cbz	x2, install_el2_stub
+	cbz	x2, install_el2_stub        //查看是否为0，为0跳转, 也就是跳转到EL1
 
-	mov	w0, #BOOT_CPU_MODE_EL2		// This CPU booted in EL2
+	mov	w0, #BOOT_CPU_MODE_EL2		// This CPU booted in EL2 //boot as EL1
 	isb
 	ret
 
@@ -641,11 +645,12 @@ install_el2_stub:
 
 	/* spsr */
 	mov	x0, #(PSR_F_BIT | PSR_I_BIT | PSR_A_BIT | PSR_D_BIT |\
-		      PSR_MODE_EL1h)
-	msr	spsr_el2, x0
+		      PSR_MODE_EL1h)            //这里代表回退到el1
+	msr	spsr_el2, x0 
+    //将lr寄存器保存在elr_el2寄存器中，lr寄存器存储当前异常返回地址
 	msr	elr_el2, lr
-	mov	w0, #BOOT_CPU_MODE_EL2		// This CPU booted in EL2
-	eret
+	mov	w0, #BOOT_CPU_MODE_EL2		// This CPU booted in EL2   //boot as el2
+	eret                            //当作异常返回了，也就是在这里drop to el1
 ENDPROC(el2_setup)
 
 /*
@@ -655,7 +660,7 @@ ENDPROC(el2_setup)
 set_cpu_boot_mode_flag:
 	adr_l	x1, __boot_cpu_mode
 	cmp	w0, #BOOT_CPU_MODE_EL2
-	b.ne	1f
+	b.ne	1f              //不为0
 	add	x1, x1, #4
 1:	str	w0, [x1]			// This CPU has booted in EL1
 	dmb	sy

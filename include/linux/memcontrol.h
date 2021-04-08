@@ -378,13 +378,13 @@ static inline struct lruvec *mem_cgroup_lruvec(struct pglist_data *pgdat,
 	struct mem_cgroup_per_node *mz;
 	struct lruvec *lruvec;
 
-	if (mem_cgroup_disabled()) {
-		lruvec = node_lruvec(pgdat);
+	if (mem_cgroup_disabled()) {        //如果没有使能mem_cgroup
+		lruvec = node_lruvec(pgdat);    //取node上的lru ==> pgdat->lruvec
 		goto out;
 	}
 
 	mz = mem_cgroup_nodeinfo(memcg, pgdat->node_id);
-	lruvec = &mz->lruvec;
+	lruvec = &mz->lruvec;               //取cgroup上的
 out:
 	/*
 	 * Since a node can be onlined after the mem_cgroup was created,

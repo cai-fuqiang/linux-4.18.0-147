@@ -626,14 +626,14 @@ static inline int split_swap_cluster(swp_entry_t entry)
 static inline int mem_cgroup_swappiness(struct mem_cgroup *memcg)
 {
 	/* Cgroup2 doesn't have per-cgroup swappiness */
-	if (cgroup_subsys_on_dfl(memory_cgrp_subsys))
+	if (cgroup_subsys_on_dfl(memory_cgrp_subsys))   //如果是cgroup v2
 		return vm_swappiness;
 
 	/* root ? */
-	if (mem_cgroup_disabled() || !memcg->css.parent)
-		return vm_swappiness;
+	if (mem_cgroup_disabled() || !memcg->css.parent)    //如果没有开启cgroup memory
+		return vm_swappiness;                           //或者是root， 返回全局
 
-	return memcg->swappiness;
+	return memcg->swappiness;                           //返回本cgroup的
 }
 #else
 static inline int mem_cgroup_swappiness(struct mem_cgroup *mem)

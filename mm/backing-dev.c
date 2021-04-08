@@ -249,6 +249,7 @@ static int __init default_bdi_init(void)
 {
 	int err;
 
+    //创建一个writeback工作队列
 	bdi_wq = alloc_workqueue("writeback", WQ_MEM_RECLAIM | WQ_FREEZABLE |
 					      WQ_UNBOUND | WQ_SYSFS, 0);
 	if (!bdi_wq)
@@ -315,7 +316,7 @@ static int wb_init(struct bdi_writeback *wb, struct backing_dev_info *bdi,
 
 	spin_lock_init(&wb->work_lock);
 	INIT_LIST_HEAD(&wb->work_list);
-	INIT_DELAYED_WORK(&wb->dwork, wb_workfn);
+	INIT_DELAYED_WORK(&wb->dwork, wb_workfn);       //初始化dwork
 	wb->dirty_sleep = jiffies;
 
 	wb->congested = wb_congested_get_create(bdi, blkcg_id, gfp);
@@ -1036,7 +1037,7 @@ EXPORT_SYMBOL(congestion_wait);
 
 /**
  * wait_iff_congested - Conditionally wait for a backing_dev to become uncongested or a pgdat to complete writes
- * @sync: SYNC or ASYNC IO
+ * @sync: SYNC or ASYNC IO              //同步或者异步
  * @timeout: timeout in jiffies
  *
  * In the event of a congested backing_dev (any backing_dev) this waits
@@ -1046,6 +1047,10 @@ EXPORT_SYMBOL(congestion_wait);
  * The return value is 0 if the sleep is for the full timeout. Otherwise,
  * it is the number of jiffies that were still remaining when the function
  * returned. return_value == timeout implies the function did not sleep.
+ */
+
+/*
+ * wait_iff_congested  - 有条件的去等一个backing_dev达到不拥挤的状态或者等一个pgdat 完成了写操作
  */
 long wait_iff_congested(int sync, long timeout)
 {

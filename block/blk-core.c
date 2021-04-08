@@ -458,7 +458,7 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 	q->node = node_id;
 
 	timer_setup(&q->backing_dev_info->laptop_mode_wb_timer,
-		    laptop_mode_timer_fn, 0);
+		    laptop_mode_timer_fn, 0);               //分配laptop_mode_timer_fn
 	timer_setup(&q->timeout, blk_rq_timed_out_timer, 0);
 	INIT_WORK(&q->timeout_work, NULL);
 	INIT_LIST_HEAD(&q->icq_list);
