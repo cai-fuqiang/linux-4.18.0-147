@@ -2069,7 +2069,7 @@ static inline void init_sync_kiocb(struct kiocb *kiocb, struct file *filp)
  *			        fdatasync()去写inode当我们只修改mtime时。
  *
  * I_DIRTY_PAGES	Inode has dirty pages.  Inode itself may be clean.
- *                  Inode 有脏页. 但是Inode 自己可能是干净的
+ *                  Inode 有脏页. 但是Inode 自己可能是干净的。
  *
  * I_NEW		Serves as both a mutex and completion notification.
  *			New inodes set I_NEW.  If two processes both create

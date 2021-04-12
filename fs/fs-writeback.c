@@ -1086,7 +1086,8 @@ static void inode_sync_complete(struct inode *inode)
 }
 
 static bool inode_dirtied_after(struct inode *inode, unsigned long t)
-{
+{   
+    //dirtied_when, 什么时候dirty的  返现inode->dirtied_when 在t之后
 	bool ret = time_after(inode->dirtied_when, t);
 #ifndef CONFIG_64BIT
 	/*
@@ -1107,7 +1108,7 @@ static bool inode_dirtied_after(struct inode *inode, unsigned long t)
  * @delaying_queue to @dispatch_queue.
  */
 /*
- * 从delaying_queue移动过期的(在work->older_tha_this 之前被dirty的)ditry 
+ * 从delaying_queue移动过期的(在work->older_than_this 之前被dirty的)dirty 
  * inode ,移动到dispatch_queue
  */
 static int move_expired_inodes(struct list_head *delaying_queue,
@@ -1125,30 +1126,39 @@ static int move_expired_inodes(struct list_head *delaying_queue,
 	int moved = 0;
 
 	if ((flags & EXPIRE_DIRTY_ATIME) == 0)
+        //如果没有这个flag，则将时限规定在work->older_than_this
 		older_than_this = work->older_than_this;
-	else if (!work->for_sync) {
+	else if (!work->for_sync) { 
+        //最低期限在dirtytime_expire_interval
 		expire_time = jiffies - (dirtytime_expire_interval * HZ);
 		older_than_this = &expire_time;
 	}
-	while (!list_empty(delaying_queue)) {
-		inode = wb_inode(delaying_queue->prev);
+	while (!list_empty(delaying_queue)) {   //如果不是空
+		inode = wb_inode(delaying_queue->prev); //取第一个
+        //这个判断也就是说，最老的inode也在older_than_this时间之后，
+        //也就是没有达到回收的范围
 		if (older_than_this &&
 		    inode_dirtied_after(inode, *older_than_this))
 			break;
-		list_move(&inode->i_io_list, &tmp);
+        //如果达到回收的效果了
+		list_move(&inode->i_io_list, &tmp); //移动到tmp
 		moved++;
 		if (flags & EXPIRE_DIRTY_ATIME)
 			set_bit(__I_DIRTY_TIME_EXPIRED, &inode->i_state);
 		if (sb_is_blkdev_sb(inode->i_sb))
 			continue;
-		if (sb && sb != inode->i_sb)
+		if (sb && sb != inode->i_sb)        //如果有其他的sb 则do_sb_sort = 1
 			do_sb_sort = 1;
 		sb = inode->i_sb;
 	}
 
 	/* just one sb in list, splice to dispatch_queue and we're done */
+    /* 
+     * 队列中仅仅只有一个superblock，splice to dispatch_queue，然后
+     * 我们就做完了
+     */
 	if (!do_sb_sort) {
-		list_splice(&tmp, dispatch_queue);
+		list_splice(&tmp, dispatch_queue);//移动到dispatch_queue
 		goto out;
 	}
 
@@ -1157,7 +1167,7 @@ static int move_expired_inodes(struct list_head *delaying_queue,
 		sb = wb_inode(tmp.prev)->i_sb;
 		list_for_each_prev_safe(pos, node, &tmp) {
 			inode = wb_inode(pos);
-			if (inode->i_sb == sb)
+			if (inode->i_sb == sb)      //将相同sb的移动到一起
 				list_move(&inode->i_io_list, dispatch_queue);
 		}
 	}
@@ -1185,8 +1195,10 @@ static void queue_io(struct bdi_writeback *wb, struct wb_writeback_work *work)
 
 	assert_spin_locked(&wb->list_lock);
     //将b_more_io 放到io
-	list_splice_init(&wb->b_more_io, &wb->b_io);
-	moved = move_expired_inodes(&wb->b_dirty, &wb->b_io, 0, work);
+	list_splice_init(&wb->b_more_io, &wb->b_io);    //这个是无条件全移动了
+    //移动过期的: older > work->older_tha_this
+	moved = move_expired_inodes(&wb->b_dirty, &wb->b_io, 0, work);  
+    //这个则是将b_dirty_time上的inode按照dirtytime_expire_interval 处理
 	moved += move_expired_inodes(&wb->b_dirty_time, &wb->b_io,
 				     EXPIRE_DIRTY_ATIME, work);
 	if (moved)
@@ -1721,7 +1733,7 @@ static long writeback_inodes_wb(struct bdi_writeback *wb, long nr_pages,
 
 	blk_start_plug(&plug);
 	spin_lock(&wb->list_lock);
-	if (list_empty(&wb->b_io))
+	if (list_empty(&wb->b_io))      //如果没有则queue下
 		queue_io(wb, &work);
 	__writeback_inodes_wb(wb, &work);
 	spin_unlock(&wb->list_lock);
@@ -1774,11 +1786,11 @@ static long wb_writeback(struct bdi_writeback *wb,
 
 	blk_start_plug(&plug);
 	spin_lock(&wb->list_lock);
-	for (;;) {
+	for (;;) {      //这个是一个死循环
 		/*
 		 * Stop writeback when nr_pages has been consumed(消耗)
 		 */
-		if (work->nr_pages <= 0)
+		if (work->nr_pages <= 0)        //当没有脏页的时候
 			break;
 
 		/*
@@ -1793,7 +1805,7 @@ static long wb_writeback(struct bdi_writeback *wb,
          * 在其他work做完之后，将会被重新执行。
          */
 		if ((work->for_background || work->for_kupdate) &&
-		    !list_empty(&wb->work_list))
+		    !list_empty(&wb->work_list))                //没有work_list
 			break;
 
 		/*
@@ -1817,6 +1829,10 @@ static long wb_writeback(struct bdi_writeback *wb,
          * kupdate和backgroup work 是特殊的，并且我们想包括所有需要write
          * 的inode. 这些work处理避免活锁，而其他任何工作也都这样做，因此
          * 我们很安全.
+         */
+        /*
+         * oldest_jif = 当前jif - dirty_expire_interval  * 10  的jif
+         * 比这个时间小的就说明，dirty数据就超过了最长的保留时间。
          */
 		if (work->for_kupdate) {
 			oldest_jif = jiffies -
@@ -1915,12 +1931,14 @@ static long wb_check_old_data_flush(struct bdi_writeback *wb)
 	if (!dirty_writeback_interval)
 		return 0;
 
-	expired = wb->last_old_flush +
+    //上次flush的时间 + dirty_writeback_interval
+	expired = wb->last_old_flush +      
 			msecs_to_jiffies(dirty_writeback_interval * 10);
+    //如果这次时间小于这个expired的话，则返回0
 	if (time_before(jiffies, expired))
 		return 0;
 
-	wb->last_old_flush = jiffies;
+	wb->last_old_flush = jiffies;   //现在要开始flush了, 所以记录下时间
 	nr_pages = get_nr_dirty_pages();
 
 	if (nr_pages) {
