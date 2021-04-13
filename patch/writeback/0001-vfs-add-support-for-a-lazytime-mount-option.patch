@@ -113,9 +113,12 @@ index 2d609a5fbfea..004686191354 100644
  	int do_sb_sort = 0;
  	int moved = 0;
  
-+	if ((flags & EXPIRE_DIRTY_ATIME) == 0)
+    //如果没有设置 EXPIRE_DIRTY_ATIME 也就是说这个不需要关注dirtytime
++	if ((flags & EXPIRE_DIRTY_ATIME) == 0)           
 +		older_than_this = work->older_than_this;
-+	else if ((work->reason == WB_REASON_SYNC) == 0) {
+    //如果不是WB_RESION_SYNC，这个分支也就是说，需要对atime进行一些处理，
+    //要避免在短时间内写入atime metadata，以免造成性能损失
++	else if ((work->reason == WB_REASON_SYNC) == 0) {//原因不是WB_RESION_SYNC
 +		expire_time = jiffies - (HZ * 86400);
 +		older_than_this = &expire_time;
 +	}
@@ -129,7 +132,7 @@ index 2d609a5fbfea..004686191354 100644
  		list_move(&inode->i_wb_list, &tmp);
  		moved++;
 +		if (flags & EXPIRE_DIRTY_ATIME)
-+			set_bit(__I_DIRTY_TIME_EXPIRED, &inode->i_state);
++			set_bit(__I_DIRTY_TIME_EXPIRED, &inode->i_state);   //仅仅只是设置一下,后面也没有用到
  		if (sb_is_blkdev_sb(inode->i_sb))
  			continue;
  		if (sb && sb != inode->i_sb)
@@ -142,6 +145,8 @@ index 2d609a5fbfea..004686191354 100644
  	list_splice_init(&wb->b_more_io, &wb->b_io);
 -	moved = move_expired_inodes(&wb->b_dirty, &wb->b_io, work);
 +	moved = move_expired_inodes(&wb->b_dirty, &wb->b_io, 0, work);
+    //这里我们来看，b_dirty_time 链的移动实际上是加了EXPIRE_DIRTY_ATIME, 
+    //而上面调用没有加，也就是说这个链需要被特殊处理
 +	moved += move_expired_inodes(&wb->b_dirty_time, &wb->b_io,
 +				     EXPIRE_DIRTY_ATIME, work);
  	trace_writeback_queue_io(wb, work, moved);
@@ -151,7 +156,7 @@ index 2d609a5fbfea..004686191354 100644
  		 * updates after data IO completion.
  		 */
  		redirty_tail(inode, wb);
-+	} else if (inode->i_state & I_DIRTY_TIME) {
++	} else if (inode->i_state & I_DIRTY_TIME) {         //将其移动到wb->b_dirty_time
 +		list_move(&inode->i_wb_list, &wb->b_dirty_time);
  	} else {
  		/* The inode is clean. Remove from writeback lists. */
@@ -214,6 +219,7 @@ index 2d609a5fbfea..004686191354 100644
   * page->mapping->host, so the page-dirtying time is recorded in the internal
   * blockdev inode.
   */
+//增加I_DIRTY_INODE，代表INODE有更改
 +#define I_DIRTY_INODE (I_DIRTY_SYNC | I_DIRTY_DATASYNC)
  void __mark_inode_dirty(struct inode *inode, int flags)
  {
@@ -236,9 +242,13 @@ index 2d609a5fbfea..004686191354 100644
  
  		trace_writeback_dirty_inode(inode, flags);
  	}
-+	if (flags & I_DIRTY_INODE)
+    //这里的意思是:
+    //如果标记了I_DIRTY_INODE，则如果本次make_dirty的原因是I_DIRTY_TIME，也没有
+    //必要再进行标记，因为本次一定要make_dirty了，正好将dirtytime也进行writeback
+    //也不会造成性能损耗，何乐不为
++	if (flags & I_DIRTY_INODE)      //如果I_DIRTY_INODE则flag取消I_DIRTY_TIME
 +		flags &= ~I_DIRTY_TIME;
-+	dirtytime = flags & I_DIRTY_TIME;
++	dirtytime = flags & I_DIRTY_TIME;   //查看是否有该标记
  
  	/*
  	 * Paired with smp_mb() in __writeback_single_inode() for the
@@ -247,21 +257,25 @@ index 2d609a5fbfea..004686191354 100644
  	smp_mb();
  
 -	if ((inode->i_state & flags) == flags)
-+	if (((inode->i_state & flags) == flags) ||
-+	    (dirtytime && (inode->i_state & I_DIRTY_INODE)))
+    //底下的代码意思是，如果i_state中有之前的flag，不用再标记一次了
+    //第二个或判断同上：如果标记了I_DIRTY_INODE，是一定要进行writeback的
+    //所以没有必要再增加I_DIRTY_TIME，规避不要writeback
++	if (((inode->i_state & flags) == flags) || //如果i_state中flags中的所有标记没有变化
++	    (dirtytime && (inode->i_state & I_DIRTY_INODE)))//flag中有dirtytime并且i_state中有I_DIRTY_INODE
  		return;
  
  	if (unlikely(block_dump))
  		block_dump___mark_inode_dirty(inode);
  
  	spin_lock(&inode->i_lock);
+    //这里加锁再判断一次
 +	if (dirtytime && (inode->i_state & I_DIRTY_INODE))
 +		goto out_unlock_inode;
  	if ((inode->i_state & flags) != flags) {
  		const int was_dirty = inode->i_state & I_DIRTY;
  
 +		if (flags & I_DIRTY_INODE)
-+			inode->i_state &= ~I_DIRTY_TIME;
++			inode->i_state &= ~I_DIRTY_TIME;    //将inode中的i_state取消I_DIRTY_TIME的标记
  		inode->i_state |= flags;
  
  		/*
@@ -270,7 +284,9 @@ index 2d609a5fbfea..004686191354 100644
  
  			inode->dirtied_when = jiffies;
 -			list_move(&inode->i_wb_list, &bdi->wb.b_dirty);
-+			list_move(&inode->i_wb_list, dirtytime ?
+            //走到这里实际上，就可以说明如果有dirtytime，则一定没有I_DIRTY_INODE
+            //所以需要将其移动到b_dirty_time 链上，避免短时间内将其writeback
++			list_move(&inode->i_wb_list, dirtytime ?        
 +				  &bdi->wb.b_dirty_time : &bdi->wb.b_dirty);
  			spin_unlock(&bdi->wb.list_lock);
 +			trace_writeback_dirty_inode_enqueue(inode);
@@ -355,11 +371,11 @@ index aa149e7262ac..4feb85cc125f 100644
 +	if (atomic_dec_and_lock(&inode->i_count, &inode->i_lock)) {
 +		if (inode->i_nlink && (inode->i_state & I_DIRTY_TIME)) {
 +			atomic_inc(&inode->i_count);
-+			inode->i_state &= ~I_DIRTY_TIME;
++			inode->i_state &= ~I_DIRTY_TIME;    //将其i_state取消I_DIRTY_TIME标记
 +			spin_unlock(&inode->i_lock);
 +			trace_writeback_lazytime_iput(inode);
-+			mark_inode_dirty_sync(inode);
-+			goto retry;
++			mark_inode_dirty_sync(inode);       //执行writeback操作
++			goto retry;                         //重新执行一次
 +		}
 +		iput_final(inode);
  	}
@@ -378,7 +394,7 @@ index aa149e7262ac..4feb85cc125f 100644
  {
 -	if (inode->i_op->update_time)
 -		return inode->i_op->update_time(inode, time, flags);
-+	int iflags = I_DIRTY_TIME;
++	int iflags = I_DIRTY_TIME;              //将iflags赋值为I_DIRTY_TIME
  
  	if (flags & S_ATIME)
  		inode->i_atime = *time;
@@ -386,11 +402,11 @@ index aa149e7262ac..4feb85cc125f 100644
  		inode->i_ctime = *time;
  	if (flags & S_MTIME)
  		inode->i_mtime = *time;
--	mark_inode_dirty_sync(inode);
-+
-+	if (!(inode->i_sb->s_flags & MS_LAZYTIME) || (flags & S_VERSION))
+-	mark_inode_dirty_sync(inode);           //取消之前sync操作
++   //如果文件系统没有MS_LASYTIME 或者flag 有S_VERSION(S_VERSION?)
++	if (!(inode->i_sb->s_flags & MS_LAZYTIME) || (flags & S_VERSION))   //这个S_VERSION不知道是啥
 +		iflags |= I_DIRTY_SYNC;
-+	__mark_inode_dirty(inode, iflags);
++	__mark_inode_dirty(inode, iflags);      //尝试make inode dirty
  	return 0;
  }
 +EXPORT_SYMBOL(generic_update_time);
@@ -402,11 +418,11 @@ index aa149e7262ac..4feb85cc125f 100644
 +static int update_time(struct inode *inode, struct timespec *time, int flags)
 +{
 +	int (*update_time)(struct inode *, struct timespec *, int);
-+
++   //如果i_op中实现了update_time，则赋值它，如果没有实现，则赋值generic_update_time
 +	update_time = inode->i_op->update_time ? inode->i_op->update_time :
 +		generic_update_time;
 +
-+	return update_time(inode, time, flags);
++	return update_time(inode, time, flags);     //调用update_time
 +}
  
  /**
@@ -420,7 +436,9 @@ index 33aa0cc1f8b8..10815f8dfd8b 100644
  
  	mutex_lock(&inode->i_mutex);
 -	if (!(inode->i_state & I_DIRTY) ||
-+	if (!(inode->i_state & I_DIRTY_ALL) ||
+    //可以在这里看出sync的操作实际上是对I_DIRTY_TIME的inode也会writeback，所以sync会将全
+    //数据写回
++	if (!(inode->i_state & I_DIRTY_ALL) ||      
  	    (datasync && !(inode->i_state & I_DIRTY_DATASYNC))) {
  		/* Make sure committed changes hit the disk */
  		jfs_flush_journal(JFS_SBI(inode->i_sb)->log, 1);
@@ -433,7 +451,8 @@ index 005843ce5dbd..b2ffdb045be4 100644
  	mutex_lock(&inode->i_mutex);
  	ret = sync_mapping_buffers(inode->i_mapping);
 -	if (!(inode->i_state & I_DIRTY))
-+	if (!(inode->i_state & I_DIRTY_ALL))
+    //同上
++	if (!(inode->i_state & I_DIRTY_ALL))                //同上
  		goto out;
  	if (datasync && !(inode->i_state & I_DIRTY_DATASYNC))
  		goto out;
@@ -461,9 +480,9 @@ index 01d9f18a70b5..fbc98ee62044 100644
 +
  	if (!file->f_op->fsync)
  		return -EINVAL;
-+	if (!datasync && (inode->i_state & I_DIRTY_TIME)) {
++	if (!datasync && (inode->i_state & I_DIRTY_TIME)) { //如果没有datasync，又有I_DIRTY_TIME标记
 +		spin_lock(&inode->i_lock);
-+		inode->i_state &= ~I_DIRTY_TIME;
++		inode->i_state &= ~I_DIRTY_TIME;                //将标记取消?
 +		spin_unlock(&inode->i_lock);
 +		mark_inode_dirty_sync(inode);
 +	}
@@ -478,7 +497,8 @@ index 5da6012b7a14..4cdf7336f64a 100644
  	struct list_head b_dirty;	/* dirty inodes */
  	struct list_head b_io;		/* parked for writeback */
  	struct list_head b_more_io;	/* parked for more writeback */
-+	struct list_head b_dirty_time;	/* time stamps are dirty */
+    //增加一个list,用来存储timestamps
++	struct list_head b_dirty_time;	/* time stamps are dirty */ 
  	spinlock_t list_lock;		/* protects the b_* lists */
  };
  
@@ -495,7 +515,7 @@ index 42efe13077b6..cd027ce2c705 100644
 +#define I_DIRTY_TIME_EXPIRED	(1 << __I_DIRTY_TIME_EXPIRED)
  
  #define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
-+#define I_DIRTY_ALL (I_DIRTY | I_DIRTY_TIME)
++#define I_DIRTY_ALL (I_DIRTY | I_DIRTY_TIME)   //增加了个I_DIRTY_TIME
  
  extern void __mark_inode_dirty(struct inode *, int);
  static inline void mark_inode_dirty(struct inode *inode)
@@ -677,7 +697,7 @@ index 0ae0df55000b..915feea94c66 100644
  	INIT_LIST_HEAD(&wb->b_dirty);
  	INIT_LIST_HEAD(&wb->b_io);
  	INIT_LIST_HEAD(&wb->b_more_io);
-+	INIT_LIST_HEAD(&wb->b_dirty_time);
++	INIT_LIST_HEAD(&wb->b_dirty_time);          //初始化中增加b_dirty_time标记
  	spin_lock_init(&wb->list_lock);
  	INIT_DELAYED_WORK(&wb->dwork, bdi_writeback_workfn);
  }
