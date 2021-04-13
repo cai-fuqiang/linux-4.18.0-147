@@ -1368,8 +1368,8 @@ static unsigned long shrink_page_list(struct list_head *page_list,
              * kswapd也要去pageout()一些page cache 来释放内存
              */
 			if (page_is_file_cache(page) &&
-			    (!current_is_kswapd() || !PageReclaim(page) ||
-			     !test_bit(PGDAT_DIRTY, &pgdat->flags))) {
+			    (!current_is_kswapd() || !PageReclaim(page) ||      //如果不是kswapd肯定进来
+			     !test_bit(PGDAT_DIRTY, &pgdat->flags))) {          //没有扫描到全是dirty的情况
 				/*
 				 * Immediately reclaim when written back.
 				 * Similar in principal to deactivate_page()
@@ -2356,6 +2356,9 @@ enum scan_balance {
  * by looking at the fraction of the pages scanned we did rotate back
  * onto the active list instead of evict.
  *
+ * 确定应该被扫描的anon和file LRU list的力度(实际上也就是他俩扫描的比例)。
+ * 这个每一
+ *
  * nr[0] = anon inactive pages to scan; nr[1] = anon active pages to scan
  * nr[2] = file inactive pages to scan; nr[3] = file active pages to scan
  */
@@ -2388,8 +2391,13 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	 * using the memory controller's swap limit feature would be
 	 * too expensive.
 	 */
+    /*
+     * 全局性的reclaim 将会swap来阻止OOM即使没有swappiness,但是当
+     * 使用memory controller's swap limit功能太过于昂贵时，
+     * memcg users 希望通过这个knob去来完全禁用个别组的swapping。
+     */
 	if (!global_reclaim(sc) && !swappiness) {
-		scan_balance = SCAN_FILE;
+		scan_balance = SCAN_FILE;           //只扫描FILE
 		goto out;
 	}
 
@@ -2398,6 +2406,10 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	 * system is close to OOM, scan both anon and file equally
 	 * (unless the swappiness setting disagrees with swapping).
 	 */
+    /*
+     * 当系统接近OOM时，请勿应用任何平衡技巧，请同时扫描文件和
+     * 匿名文件(除非swappiness 设置不同意swapping)
+     */
 	if (!sc->priority && swappiness) {
 		scan_balance = SCAN_EQUAL;
 		goto out;
@@ -2414,7 +2426,7 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	 */
     /*
      * 防止回收者陷入cache trap:
-     * cache pages 开始inactive, 每一个cache fault 将会让扫描平衡
+     * cache pages 起初是inactive, 每一个cache fault 将会让扫描平衡
      * 向着file LRU倾斜.当file LRU回收,
      */
 	if (global_reclaim(sc)) {
@@ -2461,16 +2473,20 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	 */
 	if (!inactive_list_is_low(lruvec, true, memcg, sc, false) &&
 	    lruvec_lru_size(lruvec, LRU_INACTIVE_FILE, sc->reclaim_idx) >> sc->priority) {
-		scan_balance = SCAN_FILE;
+		scan_balance = SCAN_FILE;           //扫描FILE
 		goto out;
 	}
 
-	scan_balance = SCAN_FRACT;
+	scan_balance = SCAN_FRACT;              //这个就是得算一下了
 
 	/*
 	 * With swappiness at 100, anonymous and file have the same priority.
 	 * This scanning priority is essentially the inverse of IO cost.
 	 */
+    /*
+     * 如果swappiness值为100，anonymous 和 file 有相同的机会。
+     * 这个scanning的优先级本质上是IO成本的倒数
+     */
 	anon_prio = swappiness;
 	file_prio = 200 - anon_prio;
 
@@ -3030,7 +3046,7 @@ static void shrink_zones(struct zonelist *zonelist, struct scan_control *sc)
 		 * Take care memory controller reclaiming has small influence
 		 * to global LRU.
 		 */
-		if (global_reclaim(sc)) {
+		if (global_reclaim(sc)) {       //如果是全局回收
 			if (!cpuset_zone_allowed(zone,
 						 GFP_KERNEL | __GFP_HARDWALL))
 				continue;
