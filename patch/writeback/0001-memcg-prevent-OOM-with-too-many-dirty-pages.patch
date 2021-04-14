@@ -1,0 +1,204 @@
+From e62e384e9da8d9a0c599795464a7e76fd490931c Mon Sep 17 00:00:00 2001
+From: Michal Hocko <mhocko@suse.cz>
+Date: Tue, 31 Jul 2012 16:45:55 -0700
+Subject: [PATCH] memcg: prevent OOM with too many dirty pages
+
+The current implementation of dirty pages throttling is not memcg aware
+which makes it easy to have memcg LRUs full of dirty pages.  Without
+throttling, these LRUs can be scanned faster than the rate of writeback,
+leading to memcg OOM conditions when the hard limit is small.
+
+在当前dirty pages调节机制下并没有去顾及memcg，这样导致memcg LRU充满了dirty 
+pages 非常容易。没有调节机制，这些LRU被扫描的速度比writeback速度快，当hard 
+limit 非常小的时候，就会触发memcg OOM。
+
+This patch fixes the problem by throttling the allocating process
+(possibly a writer) during the hard limit reclaim by waiting on
+PageReclaim pages.  We are waiting only for PageReclaim pages because
+those are the pages that made one full round over LRU and that means that
+the writeback is much slower than scanning.
+
+这个patch FIX这个问题通过调节allocating process(可能事一个writer)在达到了
+hard limit reclaim后, 去等待PageReclaim pages。我们仅等待PageReclaim Pages
+因为这些pages 经历过完整的一轮LRU扫描并且这意味着writeback 比 scanning
+慢得多。
+
+The solution is far from being ideal - long term solution is memcg aware
+dirty throttling - but it is meant to be a band aid until we have a real
+fix.  We are seeing this happening during nightly backups which are placed
+into containers to prevent from eviction of the real working set.
+
+这个解决方法远远达不到理想的程度。长期的解决方案事让memcg aware dirty
+throttling - 但是直到我们有一个真正的fix，我们才意味着有一个Band Aid(迪邦,
+这里的意思可能是把这个坑完全填上)。我们看到的(OOM)都是在晚上备份的时候，这些
+备份被放入容器中，以防止实际real working set 被赶出去。
+
+The change affects only memcg reclaim and only when we encounter
+PageReclaim pages which is a signal that the reclaim doesn't catch up on
+with the writers so somebody should be throttled.  This could be
+potentially unfair because it could be somebody else from the group who
+gets throttled on behalf of the writer but as writers need to allocate as
+well and they allocate in higher rate the probability that only innocent
+processes would be penalized is not that high.
+
+这个改变仅仅影响memcg reclaim 并且只有当我们遇到PageReclaim Page,这是一个
+信号预示着reclaim已经赶不上这些writers，所以某些人应该被throttled。这可能
+有潜在的不公平因为可能有来自于组内的其他writer因为这个writer的行为受到了
+throttled，但是writers也需要分配资源。并且只有他们分配的次数更多，无辜者受到的
+触发才不是那么高.
+
+I have tested this change by a simple dd copying /dev/zero to tmpfs or
+ext3 running under small memcg (1G copy under 5M, 60M, 300M and 2G
+containers) and dd got killed by OOM killer every time.  With the patch I
+could run the dd with the same size under 5M controller without any OOM.
+The issue is more visible with slower devices for output.
+
+* With the patch
+================
+* tmpfs size=2G
+---------------
+$ vim cgroup_cache_oom_test.sh
+$ ./cgroup_cache_oom_test.sh 5M
+using Limit 5M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 30.4049 s, 34.5 MB/s
+$ ./cgroup_cache_oom_test.sh 60M
+using Limit 60M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 31.4561 s, 33.3 MB/s
+$ ./cgroup_cache_oom_test.sh 300M
+using Limit 300M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 20.4618 s, 51.2 MB/s
+$ ./cgroup_cache_oom_test.sh 2G
+using Limit 2G for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 1.42172 s, 738 MB/s
+
+* ext3
+------
+$ ./cgroup_cache_oom_test.sh 5M
+using Limit 5M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 27.9547 s, 37.5 MB/s
+$ ./cgroup_cache_oom_test.sh 60M
+using Limit 60M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 30.3221 s, 34.6 MB/s
+$ ./cgroup_cache_oom_test.sh 300M
+using Limit 300M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 24.5764 s, 42.7 MB/s
+$ ./cgroup_cache_oom_test.sh 2G
+using Limit 2G for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 3.35828 s, 312 MB/s
+
+* Without the patch
+===================
+* tmpfs size=2G
+---------------
+$ ./cgroup_cache_oom_test.sh 5M
+using Limit 5M for group
+./cgroup_cache_oom_test.sh: line 46:  4668 Killed                  dd if=/dev/zero of=$OUT/zero bs=1M count=$count
+$ ./cgroup_cache_oom_test.sh 60M
+using Limit 60M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 25.4989 s, 41.1 MB/s
+$ ./cgroup_cache_oom_test.sh 300M
+using Limit 300M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 24.3928 s, 43.0 MB/s
+$ ./cgroup_cache_oom_test.sh 2G
+using Limit 2G for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 1.49797 s, 700 MB/s
+
+* ext3
+------
+$ ./cgroup_cache_oom_test.sh 5M
+using Limit 5M for group
+./cgroup_cache_oom_test.sh: line 46:  4689 Killed                  dd if=/dev/zero of=$OUT/zero bs=1M count=$count
+$ ./cgroup_cache_oom_test.sh 60M
+using Limit 60M for group
+./cgroup_cache_oom_test.sh: line 46:  4692 Killed                  dd if=/dev/zero of=$OUT/zero bs=1M count=$count
+$ ./cgroup_cache_oom_test.sh 300M
+using Limit 300M for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 20.248 s, 51.8 MB/s
+$ ./cgroup_cache_oom_test.sh 2G
+using Limit 2G for group
+1000+0 records in
+1000+0 records out
+1048576000 bytes (1.0 GB) copied, 2.85201 s, 368 MB/s
+
+[akpm@linux-foundation.org: tweak changelog, reordered the test to optimize for CONFIG_CGROUP_MEM_RES_CTLR=n]
+[hughd@google.com: fix deadlock with loop driver]
+Cc: KAMEZAWA Hiroyuki <kamezawa.hiroyu@jp.fujtisu.com>
+Cc: Minchan Kim <minchan@kernel.org>
+Cc: Rik van Riel <riel@redhat.com>
+Cc: Ying Han <yinghan@google.com>
+Cc: Greg Thelen <gthelen@google.com>
+Cc: Hugh Dickins <hughd@google.com>
+Reviewed-by: Mel Gorman <mgorman@suse.de>
+Acked-by: Johannes Weiner <hannes@cmpxchg.org>
+Reviewed-by: Fengguang Wu <fengguang.wu@intel.com>
+Signed-off-by: Michal Hocko <mhocko@suse.cz>
+Cc: <stable@vger.kernel.org>
+Signed-off-by: Andrew Morton <akpm@linux-foundation.org>
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+---
+ mm/vmscan.c | 23 ++++++++++++++++++++---
+ 1 file changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/mm/vmscan.c b/mm/vmscan.c
+index 88804017e7d6..ca43aa00ea0e 100644
+--- a/mm/vmscan.c
++++ b/mm/vmscan.c
+@@ -720,9 +720,26 @@ static unsigned long shrink_page_list(struct list_head *page_list,
+ 			(PageSwapCache(page) && (sc->gfp_mask & __GFP_IO));
+ 
+ 		if (PageWriteback(page)) {
+-			nr_writeback++;
+-			unlock_page(page);
+-			goto keep;
++			/*
++			 * memcg doesn't have any dirty pages throttling so we
++			 * could easily OOM just because too many pages are in
++			 * writeback from reclaim and there is nothing else to
++			 * reclaim.
++			 *
++			 * Check may_enter_fs, certainly because a loop driver
++			 * thread might enter reclaim, and deadlock if it waits
++			 * on a page for which it is needed to do the write
++			 * (loop masks off __GFP_IO|__GFP_FS for this reason);
++			 * but more thought would probably show more reasons.
++			 */
++			if (!global_reclaim(sc) && PageReclaim(page) &&
++					may_enter_fs)
++				wait_on_page_writeback(page);
++			else {
++				nr_writeback++;
++				unlock_page(page);
++				goto keep;
++			}
+ 		}
+ 
+ 		references = page_check_references(page, sc);
+-- 
+2.27.0
+
+mail list :
+https://linux.kernel.narkive.com/tLD4BILU/patch-mm-memcg-prevent-from-oom-with-too-many-dirty-pages
