@@ -62,7 +62,7 @@ ENTRY(__guest_enter)
 	// Store the host regs
 	save_callee_saved_regs x1
 
-	add	x18, x0, #VCPU_CONTEXT
+	add	x18, x0, #VCPU_CONTEXT      //VCPU_CONTEXT
 
 	// Restore guest regs x0-x17
 	ldp	x0, x1,   [x18, #CPU_XREG_OFFSET(0)]
@@ -73,16 +73,16 @@ ENTRY(__guest_enter)
 	ldp	x10, x11, [x18, #CPU_XREG_OFFSET(10)]
 	ldp	x12, x13, [x18, #CPU_XREG_OFFSET(12)]
 	ldp	x14, x15, [x18, #CPU_XREG_OFFSET(14)]
-	ldp	x16, x17, [x18, #CPU_XREG_OFFSET(16)]
+	ldp	x16, x17, [x18, #CPU_XREG_OFFSET(16)]       //重新加载guest的寄存器
 
 	// Restore guest regs x19-x29, lr
 	restore_callee_saved_regs x18
 
 	// Restore guest reg x18
-	ldr	x18,      [x18, #CPU_XREG_OFFSET(18)]
+	ldr	x18,      [x18, #CPU_XREG_OFFSET(18)]       //重新加载x18,因为刚刚用了
 
 	// Do not touch any register after this!
-	eret
+	eret                                            //调用eret
 	sb
 ENDPROC(__guest_enter)
 
@@ -130,7 +130,7 @@ alternative_if ARM64_HAS_RAS_EXTN
 	cbz	x2, 1f
 	msr_s	SYS_DISR_EL1, xzr
 	orr	x0, x0, #(1<<ARM_EXIT_WITH_SERROR_BIT)
-1:	ret
+1:	ret                 //返回lr地址, 也就是__guest_entry的返回地址
 alternative_else
 	// If we have a pending asynchronous abort, now is the
 	// time to find out. From your VAXorcist book, page 666:

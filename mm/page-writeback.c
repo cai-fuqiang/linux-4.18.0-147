@@ -365,7 +365,7 @@ static unsigned long highmem_dirtyable_memory(unsigned long total)
 static unsigned long global_dirtyable_memory(void)
 {
 	unsigned long x;
-
+    //free + pagecache
 	x = global_zone_page_state(NR_FREE_PAGES);
 	/*
 	 * Pages reserved for the kernel should not be considered
@@ -397,10 +397,10 @@ static void domain_dirty_limits(struct dirty_throttle_control *dtc)
 {
 	const unsigned long available_memory = dtc->avail;
 	struct dirty_throttle_control *gdtc = mdtc_gdtc(dtc);
-	unsigned long bytes = vm_dirty_bytes;
-	unsigned long bg_bytes = dirty_background_bytes;
+	unsigned long bytes = vm_dirty_bytes;                       //dirty
+	unsigned long bg_bytes = dirty_background_bytes;            //bg_dirty
 	/* convert ratios to per-PAGE_SIZE for higher precision */
-	unsigned long ratio = (vm_dirty_ratio * PAGE_SIZE) / 100;
+	unsigned long ratio = (vm_dirty_ratio * PAGE_SIZE) / 100;   //
 	unsigned long bg_ratio = (dirty_background_ratio * PAGE_SIZE) / 100;
 	unsigned long thresh;
 	unsigned long bg_thresh;
@@ -432,14 +432,14 @@ static void domain_dirty_limits(struct dirty_throttle_control *dtc)
 		thresh = (ratio * available_memory) / PAGE_SIZE;
 
 	if (bg_bytes)
-		bg_thresh = DIV_ROUND_UP(bg_bytes, PAGE_SIZE);
+		bg_thresh = DIV_ROUND_UP(bg_bytes, PAGE_SIZE);          //这个得出来页限制
 	else
-		bg_thresh = (bg_ratio * available_memory) / PAGE_SIZE;
+		bg_thresh = (bg_ratio * available_memory) / PAGE_SIZE;  //不在计算这个
 
 	if (bg_thresh >= thresh)
 		bg_thresh = thresh / 2;
 	tsk = current;
-	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk)) {
+	if (tsk->flags & PF_LESS_THROTTLE || rt_task(tsk)) {    //没看提高
 		bg_thresh += bg_thresh / 4 + global_wb_domain.dirty_limit / 32;
 		thresh += thresh / 4 + global_wb_domain.dirty_limit / 32;
 	}
@@ -1603,10 +1603,10 @@ static void balance_dirty_pages(struct bdi_writeback *wb,
 		 * written to the server's write cache, but has not yet
 		 * been flushed to permanent storage.
 		 */
-		nr_reclaimable = global_node_page_state(NR_FILE_DIRTY) +
+		nr_reclaimable = global_node_page_state(NR_FILE_DIRTY) +                //dirty数量
 					global_node_page_state(NR_UNSTABLE_NFS);
 		gdtc->avail = global_dirtyable_memory();
-		gdtc->dirty = nr_reclaimable + global_node_page_state(NR_WRITEBACK);
+		gdtc->dirty = nr_reclaimable + global_node_page_state(NR_WRITEBACK);    //writeback数量 + dirty数量
 
 		domain_dirty_limits(gdtc);
 
@@ -1858,6 +1858,7 @@ DEFINE_PER_CPU(int, dirty_throttle_leaks) = 0;
 
 /**
  * balance_dirty_pages_ratelimited - balance dirty memory state
+ * 
  * @mapping: address_space which was dirtied
  *
  * Processes which are dirtying memory should call in here once for each page
@@ -1868,7 +1869,12 @@ DEFINE_PER_CPU(int, dirty_throttle_leaks) = 0;
  * calling it too often (ratelimiting).  But once we're over the dirty memory
  * limit we decrease the ratelimiting by a lot, to prevent individual processes
  * from overshooting the limit by (ratelimit_pages) each.
+ *
+ * 在实际的大型机上，get_writeback_state 是非常昂贵的，所以尝试避免调用太频繁
+ * (ratelimiting). 但是一旦我们超过了dirty memory limit, 我们大量减少ratelimiting,
+ * 来防止个别超出limit的程序 通过ratelimit_pages
  */
+
 void balance_dirty_pages_ratelimited(struct address_space *mapping)
 {
 	struct inode *inode = mapping->host;
@@ -1885,8 +1891,8 @@ void balance_dirty_pages_ratelimited(struct address_space *mapping)
 	if (!wb)
 		wb = &bdi->wb;
 
-	ratelimit = current->nr_dirtied_pause;
-	if (wb->dirty_exceeded)
+	ratelimit = current->nr_dirtied_pause;  //当前task 脏页门限
+	if (wb->dirty_exceeded)                 //如果设置了，则通过降低触发门限来加速脏页回收
 		ratelimit = min(ratelimit, 32 >> (PAGE_SHIFT - 10));
 
 	preempt_disable();
@@ -1896,20 +1902,28 @@ void balance_dirty_pages_ratelimited(struct address_space *mapping)
 	 * 1000+ tasks, all of them start dirtying pages at exactly the same
 	 * time, hence all honoured too large initial task->nr_dirtied_pause.
 	 */
-	p =  this_cpu_ptr(&bdp_ratelimits);
-	if (unlikely(current->nr_dirtied >= ratelimit))
+    /*
+     * 这个是为了避免一个CPU累积了大量dirty pages但是没有调用 balance_dirty_pages(),
+     * 这种情况发函俄国在当有1000+ task，他们都恰好在同一时间产生dirty pages,
+     * 因此所有的因此, all honoured too large initial task->nr_dirtied_pause.
+     */
+	p =  this_cpu_ptr(&bdp_ratelimits);     //当前cpu的脏页数
+	if (unlikely(current->nr_dirtied >= ratelimit)) //当前线程超过门限,肯定会触发balance_dirty_pages,并重置cpu
 		*p = 0;
-	else if (unlikely(*p >= ratelimit_pages)) {
-		*p = 0;
-		ratelimit = 0;
+	else if (unlikely(*p >= ratelimit_pages)) {     //cpu超过门限，肯定会触发balance_dirty_pages，重置cpu
+		*p = 0;                                 //bdp_ratelimits = 0
+		ratelimit = 0;                              //这个实际上是配合 下面的判断
 	}
 	/*
 	 * Pick up the dirtied pages by the exited tasks. This avoids lots of
 	 * short-lived tasks (eg. gcc invocations in a kernel build) escaping
 	 * the dirty throttling and livelock other long-run dirtiers.
 	 */
+    /*
+     *
+     */
 	p = this_cpu_ptr(&dirty_throttle_leaks);
-	if (*p > 0 && current->nr_dirtied < ratelimit) {
+	if (*p > 0 && current->nr_dirtied < ratelimit) {    //这个先不看
 		unsigned long nr_pages_dirtied;
 		nr_pages_dirtied = min(*p, ratelimit - current->nr_dirtied);
 		*p -= nr_pages_dirtied;
@@ -1917,7 +1931,7 @@ void balance_dirty_pages_ratelimited(struct address_space *mapping)
 	}
 	preempt_enable();
 
-	if (unlikely(current->nr_dirtied >= ratelimit))
+	if (unlikely(current->nr_dirtied >= ratelimit))     //这个条件和前面一样
 		balance_dirty_pages(wb, current->nr_dirtied);
 
 	wb_put(wb);

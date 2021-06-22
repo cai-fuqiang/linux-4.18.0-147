@@ -2707,14 +2707,14 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len,
 {
 	unsigned long end;
 	struct vm_area_struct *vma, *prev, *last;
-
+    //参数检测
 	if ((offset_in_page(start)) || start > TASK_SIZE || len > TASK_SIZE-start)
 		return -EINVAL;
 
 	len = PAGE_ALIGN(len);
 	if (len == 0)
 		return -EINVAL;
-
+    //查找vma
 	/* Find the first overlapping VMA */
 	vma = find_vma(mm, start);
 	if (!vma)

@@ -103,6 +103,15 @@ do {									\
 	}								\
 } while (0)
 
+/*
+ * 汇编约束:
+ * =r
+ * =: 表示只能写入操作数
+ * r: 使用任何通用寄存器
+ *
+ * Q: 寄存器a b c d
+ */
+
 #define __smp_load_acquire(p)						\
 ({									\
 	union { typeof(*p) __val; char __c[1]; } __u;			\

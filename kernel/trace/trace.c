@@ -98,7 +98,7 @@ static DEFINE_PER_CPU(bool, trace_taskinfo_save);
  */
 static int tracing_disabled = 1;
 
-cpumask_var_t __read_mostly	tracing_buffer_mask;
+cpumask_var_t __read_mostly	tracing_buffer_mask;    //表示系统中所有的cpu
 
 /*
  * ftrace_dump_on_oops - variable to dump ftrace buffer on oops
@@ -5421,7 +5421,7 @@ static int tracing_set_tracer(struct trace_array *tr, const char *buf)
 	if (t->init) {
 		ret = tracer_init(t, tr);
 		if (ret)
-			goto out;
+			goto out;a dump_stack
 	}
 
 	tr->current_trace = t;
@@ -8547,7 +8547,7 @@ __init static int tracer_alloc_buffers(void)
 
 	init_trace_flags_index(&global_trace);
 
-	register_tracer(&nop_trace);
+	register_tracer(&nop_trace);        //注册notrace
 
 	/* Function tracing may start here (via kernel command line) */
 	init_function_trace();

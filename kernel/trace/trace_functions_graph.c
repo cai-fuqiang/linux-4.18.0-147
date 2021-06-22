@@ -515,7 +515,7 @@ static void trace_graph_thresh_return(struct ftrace_graph_ret *trace)
 static int graph_trace_init(struct trace_array *tr)
 {
 	int ret;
-
+    
 	set_graph_array(tr);
 	if (tracing_thresh)
 		ret = register_ftrace_graph(&trace_graph_thresh_return,
@@ -533,7 +533,7 @@ static int graph_trace_init(struct trace_array *tr)
 static void graph_trace_reset(struct trace_array *tr)
 {
 	tracing_stop_cmdline_record();
-	unregister_ftrace_graph();
+	unregister_frace_graph();
 }
 
 static int graph_trace_update_thresh(struct trace_array *tr)

@@ -329,7 +329,7 @@ struct buffer_page {
 	unsigned	 read;		/* index for next read */
 	local_t		 entries;	/* entries on this page */
 	unsigned long	 real_end;	/* real end of data */
-	struct buffer_data_page *page;	/* Actual data page */
+	struct buffer_data_page *page;	/* Actual data page */      //真正的data_page
 };
 
 /*
@@ -462,20 +462,20 @@ enum {
  * head_page == tail_page && head == tail then buffer is empty.
  */
 struct ring_buffer_per_cpu {
-	int				cpu;
-	atomic_t			record_disabled;
-	struct ring_buffer		*buffer;
+	int				cpu;                    //所代表的CPU
+	atomic_t			record_disabled;    //限制ring_buffer_per_cpu的读写
+	struct ring_buffer		*buffer;        //回指ring_buffer结构
 	raw_spinlock_t			reader_lock;	/* serialize readers */
 	arch_spinlock_t			lock;
 	struct lock_class_key		lock_key;
 	struct buffer_data_page		*free_page;
-	unsigned long			nr_pages;
+	unsigned long			nr_pages;       //页面数
 	unsigned int			current_context;
-	struct list_head		*pages;
-	struct buffer_page		*head_page;	/* read from head */
-	struct buffer_page		*tail_page;	/* write to tail */
-	struct buffer_page		*commit_page;	/* committed pages */
-	struct buffer_page		*reader_page;
+	struct list_head		*pages;         //CPU buffer的页面链表
+	struct buffer_page		*head_page;	/* read from head */    //head page
+	struct buffer_page		*tail_page;	/* write to tail */     //tail page
+	struct buffer_page		*commit_page;	/* committed pages */   //提交位置，只有当被写页面提交后，才允许被读
+	struct buffer_page		*reader_page;   //reader 页面，用来交换读页面
 	unsigned long			lost_events;
 	unsigned long			last_overrun;
 	unsigned long			nest;
@@ -488,8 +488,8 @@ struct ring_buffer_per_cpu {
 	local_t				commits;
 	unsigned long			read;
 	unsigned long			read_bytes;
-	u64				write_stamp;
-	u64				read_stamp;
+	u64				write_stamp;            //最新的commit write时间
+	u64				read_stamp;             //最新的read时间
 	/* ring buffer pages to update, > 0 to add, < 0 to remove */
 	long				nr_pages_to_update;
 	struct list_head		new_pages; /* new pages to add */
@@ -501,19 +501,19 @@ struct ring_buffer_per_cpu {
 
 struct ring_buffer {
 	unsigned			flags;
-	int				cpus;
+	int				cpus;                       //ring buffer中包含的CPU数量
 	atomic_t			record_disabled;
 	atomic_t			resize_disabled;
-	cpumask_var_t			cpumask;
+	cpumask_var_t			cpumask;            //cpu位图
 
 	struct lock_class_key		*reader_lock_key;
 
-	struct mutex			mutex;
+	struct mutex			mutex;              //ring buffer访问锁
 
-	struct ring_buffer_per_cpu	**buffers;
+	struct ring_buffer_per_cpu	**buffers;      //CPU缓存区页面，每个CPU对应一项
 
 	struct hlist_node		node;
-	u64				(*clock)(void);
+	u64				(*clock)(void);             //用来记录时间戳
 
 	struct rb_irq_work		irq_work;
 	bool				time_stamp_abs;
@@ -877,7 +877,7 @@ static void rb_set_list_to_head(struct ring_buffer_per_cpu *cpu_buffer,
 	unsigned long *ptr;
 
 	ptr = (unsigned long *)&list->next;
-	*ptr |= RB_PAGE_HEAD;
+	*ptr |= RB_PAGE_HEAD;       设置为head
 	*ptr &= ~RB_PAGE_UPDATE;
 }
 
@@ -1198,18 +1198,18 @@ static int __rb_allocate_pages(long nr_pages, struct list_head *pages, int cpu)
 		set_current_oom_origin();
 	for (i = 0; i < nr_pages; i++) {
 		struct page *page;
-
+        //分配一个bpage
 		bpage = kzalloc_node(ALIGN(sizeof(*bpage), cache_line_size()),
 				    mflags, cpu_to_node(cpu));
 		if (!bpage)
 			goto free_pages;
 
-		list_add(&bpage->list, pages);
-
+		list_add(&bpage->list, pages);      //加入pages链表
+        //分配一页内存
 		page = alloc_pages_node(cpu_to_node(cpu), mflags, 0);
 		if (!page)
 			goto free_pages;
-		bpage->page = page_address(page);
+		bpage->page = page_address(page);   //赋值bpage
 		rb_init_page(bpage->page);
 
 		if (user_thread && fatal_signal_pending(current))
@@ -1246,10 +1246,10 @@ static int rb_allocate_pages(struct ring_buffer_per_cpu *cpu_buffer,
 	 * start and end with a list head. All page list items point to
 	 * other pages.
 	 */
-	cpu_buffer->pages = pages.next;
+	cpu_buffer->pages = pages.next;         //实际上还是一个循环链表
 	list_del(&pages);
 
-	cpu_buffer->nr_pages = nr_pages;
+	cpu_buffer->nr_pages = nr_pages;        //赋值nr_pages
 
 	rb_check_pages(cpu_buffer);
 
@@ -1263,7 +1263,7 @@ rb_allocate_cpu_buffer(struct ring_buffer *buffer, long nr_pages, int cpu)
 	struct buffer_page *bpage;
 	struct page *page;
 	int ret;
-
+    //先分配一个cpu_buffer
 	cpu_buffer = kzalloc_node(ALIGN(sizeof(*cpu_buffer), cache_line_size()),
 				  GFP_KERNEL, cpu_to_node(cpu));
 	if (!cpu_buffer)
@@ -1279,7 +1279,7 @@ rb_allocate_cpu_buffer(struct ring_buffer *buffer, long nr_pages, int cpu)
 	init_irq_work(&cpu_buffer->irq_work.work, rb_wake_up_waiters);
 	init_waitqueue_head(&cpu_buffer->irq_work.waiters);
 	init_waitqueue_head(&cpu_buffer->irq_work.full_waiters);
-
+    //分配buffer_page结构体
 	bpage = kzalloc_node(ALIGN(sizeof(*bpage), cache_line_size()),
 			    GFP_KERNEL, cpu_to_node(cpu));
 	if (!bpage)
@@ -1287,12 +1287,12 @@ rb_allocate_cpu_buffer(struct ring_buffer *buffer, long nr_pages, int cpu)
 
 	rb_check_bpage(cpu_buffer, bpage);
 
-	cpu_buffer->reader_page = bpage;
-	page = alloc_pages_node(cpu_to_node(cpu), GFP_KERNEL, 0);
+	cpu_buffer->reader_page = bpage;        //赋值reader_page
+	page = alloc_pages_node(cpu_to_node(cpu), GFP_KERNEL, 0);   //分配一页内存
 	if (!page)
 		goto fail_free_reader;
-	bpage->page = page_address(page);
-	rb_init_page(bpage->page);
+	bpage->page = page_address(page);       //赋值bpage->page
+	rb_init_page(bpage->page);              //bpage->commit = 0
 
 	INIT_LIST_HEAD(&cpu_buffer->reader_page->list);
 	INIT_LIST_HEAD(&cpu_buffer->new_pages);
@@ -1301,10 +1301,10 @@ rb_allocate_cpu_buffer(struct ring_buffer *buffer, long nr_pages, int cpu)
 	if (ret < 0)
 		goto fail_free_reader;
 
-	cpu_buffer->head_page
+	cpu_buffer->head_page                   
 		= list_entry(cpu_buffer->pages, struct buffer_page, list);
 	cpu_buffer->tail_page = cpu_buffer->commit_page = cpu_buffer->head_page;
-
+                                        
 	rb_head_page_activate(cpu_buffer);
 
 	return cpu_buffer;
@@ -1358,6 +1358,7 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 	int ret;
 
 	/* keep it in its own cache line */
+    //cache line 对齐
 	buffer = kzalloc(ALIGN(sizeof(*buffer), cache_line_size()),
 			 GFP_KERNEL);
 	if (!buffer)
@@ -1366,28 +1367,30 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 	if (!zalloc_cpumask_var(&buffer->cpumask, GFP_KERNEL))
 		goto fail_free_buffer;
 
-	nr_pages = DIV_ROUND_UP(size, BUF_PAGE_SIZE);
-	buffer->flags = flags;
+	nr_pages = DIV_ROUND_UP(size, BUF_PAGE_SIZE);   //计算页面数量
+	buffer->flags = flags;                          //赋值flags
 	buffer->clock = trace_clock_local;
 	buffer->reader_lock_key = key;
 
+    //注册irq work
 	init_irq_work(&buffer->irq_work.work, rb_wake_up_waiters);
 	init_waitqueue_head(&buffer->irq_work.waiters);
 
 	/* need at least two pages */
-	if (nr_pages < 2)
+	if (nr_pages < 2)                   //最少两页内存
 		nr_pages = 2;
 
-	buffer->cpus = nr_cpu_ids;
+	buffer->cpus = nr_cpu_ids;          //cpu 为当前最大CPU数量
 
 	bsize = sizeof(void *) * nr_cpu_ids;
 	buffer->buffers = kzalloc(ALIGN(bsize, cache_line_size()),
-				  GFP_KERNEL);
+				  GFP_KERNEL);          //相当于分配ring_buffer_per_cpu指针数组
 	if (!buffer->buffers)
 		goto fail_free_cpumask;
 
-	cpu = raw_smp_processor_id();
-	cpumask_set_cpu(cpu, buffer->cpumask);
+	cpu = raw_smp_processor_id();       //获取CPU
+	cpumask_set_cpu(cpu, buffer->cpumask);  //设置cpumask
+    //分配ring_buffer_per_cpu
 	buffer->buffers[cpu] = rb_allocate_cpu_buffer(buffer, nr_pages, cpu);
 	if (!buffer->buffers[cpu])
 		goto fail_free_buffers;
@@ -2868,12 +2871,12 @@ rb_reserve_next_event(struct ring_buffer *buffer,
 	if (RB_WARN_ON(cpu_buffer, ++nr_loops > 1000))
 		goto out_fail;
 
-	info.ts = rb_time_stamp(cpu_buffer->buffer);
-	diff = info.ts - cpu_buffer->write_stamp;
+	info.ts = rb_time_stamp(cpu_buffer->buffer);    //计算ts
+	diff = info.ts - cpu_buffer->write_stamp;       
 
 	/* make sure this diff is calculated here */
 	barrier();
-
+    //处理和时间戳相关内容
 	if (ring_buffer_time_stamp_abs(buffer)) {
 		info.delta = info.ts;
 		rb_handle_timestamp(cpu_buffer, &info);

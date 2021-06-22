@@ -253,6 +253,7 @@ of ftrace. Here is a list of some of the key files:
 
   set_event_pid:
 
+
 	Have the events only trace a task with a PID listed in this file.
 	Note, sched_switch and sched_wake_up will also trace events
 	listed in this file.

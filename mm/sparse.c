@@ -505,12 +505,12 @@ void __init sparse_init(void)
 	for_each_present_section_nr(pnum_begin + 1, pnum_end) {
 		int nid = sparse_early_nid(__nr_to_section(pnum_end));
 
-		if (nid == nid_begin) {
+		if (nid == nid_begin) { //如果nid相等的话，将map count ++
 			map_count++;
 			continue;
 		}
-		/* Init node with sections in range [pnum_begin, pnum_end) */
-		sparse_init_nid(nid_begin, pnum_begin, pnum_end, map_count);
+		/* Init node with sections in range [pnum_begin, pnum_end) */   //则进行一次init操作
+		sparse_init_nid(nid_begin, pnum_begin, pnum_end, map_count);  //这里是不相等
 		nid_begin = nid;
 		pnum_begin = pnum_end;
 		map_count = 1;

@@ -484,9 +484,9 @@ static inline void __cpu_init_hyp_mode(phys_addr_t pgd_ptr,
 	 * Calculate the raw per-cpu offset without a translation from the
 	 * kernel's mapping to the linear mapping, and store it in tpidr_el2
 	 * so that we can use adr_l to access per-cpu variables in EL2.
-	 */
+	 */         //得到的是per-cpu offset
 	u64 tpidr_el2 = ((u64)this_cpu_ptr(&kvm_host_cpu_state) -
-			 (u64)kvm_ksym_ref(kvm_host_cpu_state));
+			 (u64)kvm_ksym_ref(kvm_host_cpu_state));    //为啥要执行这个
 
 	/*
 	 * Call initialization code, and switch to the full blown HYP code.

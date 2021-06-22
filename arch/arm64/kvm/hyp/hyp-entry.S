@@ -162,7 +162,7 @@ el2_sync:
 
 	/* Let's attempt a recovery from the illegal exception return */
 	get_vcpu_ptr	x1, x0
-	mov	x0, #ARM_EXCEPTION_IL
+	mov	x0, #ARM_EXCEPTION_IL           //保存的是guest退出的原因
 	b	__guest_exit
 
 

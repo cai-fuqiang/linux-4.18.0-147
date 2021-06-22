@@ -850,10 +850,10 @@ int page_referenced(struct page *page,
 	};
 
 	*vm_flags = 0;
-	if (!page_mapped(page))
+	if (!page_mapped(page))         //如果没有被mapped
 		return 0;
 
-	if (!page_rmapping(page))
+	if (!page_rmapping(page))       //没有被反向映射
 		return 0;
 
 	if (!is_locked && (!PageAnon(page) || PageKsm(page))) {

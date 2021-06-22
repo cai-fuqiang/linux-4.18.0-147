@@ -22,8 +22,7 @@
 
 /* Definition of memblock flags. */
 enum memblock_flags {
-	MEMBLOCK_NONE		= 0x0,	/* No special request */
-	MEMBLOCK_HOTPLUG	= 0x1,	/* hotpluggable region */
+	MEMBLOCK_NONE		= 0x0,	/* No special request */ MEMBLOCK_HOTPLUG	= 0x1,	/* hotpluggable region */
 	MEMBLOCK_MIRROR		= 0x2,	/* mirrored region */
 	MEMBLOCK_NOMAP		= 0x4,	/* don't add to kernel direct mapping */
 };
@@ -38,16 +37,16 @@ struct memblock_region {
 };
 
 struct memblock_type {
-	unsigned long cnt;	/* number of regions */
-	unsigned long max;	/* size of the allocated array */
-	phys_addr_t total_size;	/* size of all regions */
-	struct memblock_region *regions;
-	char *name;
+	unsigned long cnt;	/* number of regions */             //region 数量
+	unsigned long max;	/* size of the allocated array */   //alloc array size
+	phys_addr_t total_size;	/* size of all regions */       //所有region数量
+	struct memblock_region *regions;                        //region数组
+	char *name;                                             //名称
 };
 
 struct memblock {
-	bool bottom_up;  /* is bottom up direction? */
-	phys_addr_t current_limit;
+	bool bottom_up;  /* is bottom up direction? */  //定义自上而下，还是自下而上
+	phys_addr_t current_limit;                      //分配最大物理内存地址
 	struct memblock_type memory;
 	struct memblock_type reserved;
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP

@@ -261,7 +261,7 @@ static void update_ftrace_function(void)
 
 	} else {
 		/* Just use the default ftrace_ops */
-		set_function_trace_op = &ftrace_list_end;
+		ssdfasdfaet_function_trace_op = &ftrace_list_end;
 		func = ftrace_ops_list_func;
 	}
 
@@ -3013,7 +3013,7 @@ static int ftrace_allocate_records(struct ftrace_page *pg, int count)
 	 * We want to fill as much as possible. No more than a page
 	 * may be empty.
 	 */
-	while ((PAGE_SIZE << order) / ENTRY_SIZE >= count + ENTRIES_PER_PAGE)
+	while ((PAGE_SIZE << ordee) / ENTRY_SIZE >= count + ENTRIES_PER_PAGE)
 		order--;
 
  again:

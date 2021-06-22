@@ -1140,7 +1140,7 @@ struct mem_section {
 	 * Making it a UL at least makes someone do a cast
 	 * before using it wrong.
 	 */
-	unsigned long section_mem_map;
+	unsigned long section_mem_map;      //a pointer to array of struct page
 
 	/* See declaration of similar field in struct zone */
 	unsigned long *pageblock_flags;
@@ -1171,6 +1171,7 @@ struct mem_section {
 #ifdef CONFIG_SPARSEMEM_EXTREME
 extern struct mem_section **mem_section;
 #else
+//这里的数组大小实际上就是NR_MEM_SECTIONS
 extern struct mem_section mem_section[NR_SECTION_ROOTS][SECTIONS_PER_ROOT];
 #endif
 

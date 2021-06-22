@@ -157,7 +157,7 @@ static void deactivate_traps_vhe(void)
 	asm(ALTERNATIVE("nop", "isb", ARM64_WORKAROUND_1165522));
 
 	write_sysreg(CPACR_EL1_DEFAULT, cpacr_el1);
-	write_sysreg(vectors, vbar_el1);
+	write_sysreg(vectors, vbar_el1);        //写入vectors
 }
 NOKPROBE_SYMBOL(deactivate_traps_vhe);
 
@@ -542,9 +542,8 @@ int kvm_vcpu_run_vhe(struct kvm_vcpu *vcpu)
 
 		/* And we're baaack! */
 	} while (fixup_guest_exit(vcpu, &exit_code));
-
+    
 	__set_host_arch_workaround_state(vcpu);
-
 	sysreg_save_guest_state_vhe(guest_ctxt);
 
 	__deactivate_traps(vcpu);
@@ -673,7 +672,7 @@ void __hyp_text __noreturn hyp_panic(struct kvm_cpu_context *host_ctxt)
 	u64 spsr = read_sysreg_el2(spsr);
 	u64 elr = read_sysreg_el2(elr);
 	u64 par = read_sysreg(par_el1);
-
+    
 	if (!has_vhe())
 		__hyp_call_panic_nvhe(spsr, elr, par, host_ctxt);
 	else

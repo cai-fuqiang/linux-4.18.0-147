@@ -193,12 +193,13 @@ static void __static_key_slow_dec_cpuslocked(struct static_key *key,
 	 * instances block while the update is in progress.
 	 */
 	if (!atomic_dec_and_mutex_lock(&key->enabled, &jump_label_mutex)) {
+        //这个条件中enable 是 != 0, 需要WARN enable < 0的情况
 		WARN(atomic_read(&key->enabled) < 0,
 		     "jump label: negative count!\n");
 		return;
 	}
-
-	if (rate_limit) {
+    //这下面都是enable == 0
+	if (rate_limit) {               //dec是0
 		atomic_inc(&key->enabled);
 		schedule_delayed_work(work, rate_limit);
 	} else {

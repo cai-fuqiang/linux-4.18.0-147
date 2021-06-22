@@ -161,7 +161,7 @@ alternative_cb_end
 	.if	\regsize == 32
 	mov	w0, w0				// zero upper 32 bits of x0
 	.endif
-	stp	x0, x1, [sp, #16 * 0]
+	stp	x0, x1, [sp, #16 * 0]       //保存寄存器到栈
 	stp	x2, x3, [sp, #16 * 1]
 	stp	x4, x5, [sp, #16 * 2]
 	stp	x6, x7, [sp, #16 * 3]
@@ -178,9 +178,11 @@ alternative_cb_end
 	stp	x28, x29, [sp, #16 * 14]
 
 	.if	\el == 0
-	mrs	x21, sp_el0
+	mrs	x21, sp_el0         //将sp_el0存放到x21中
+    //这一行代码实际上取得__entry_task per-cpu变量的this cpu 首地址
 	ldr_this_cpu	tsk, __entry_task, x20	// Ensure MDSCR_EL1.SS is clear,
 	ldr	x19, [tsk, #TSK_TI_FLAGS]	// since we can unmask debug
+    //这个先不看
 	disable_step_tsk x19, x20		// exceptions when scheduling.
 
 	apply_ssbd 1, 1f, x22, x23
@@ -190,11 +192,11 @@ alternative_cb_end
 	ldp	x2, x3, [sp, #16 * 1]
 #endif
 1:
-
+    //将fp寄存器置空
 	mov	x29, xzr			// fp pointed to user-space
-	.else
-	add	x21, sp, #S_FRAME_SIZE
-	get_thread_info tsk
+	.else                   //el != 0 (这是为啥)
+	add	x21, sp, #S_FRAME_SIZE  //将sp寄存器+ sizeof(struct pt_regs)
+	get_thread_info tsk         //将sp_elo读到tsk中
 	/* Save the task's original addr_limit and set USER_DS */
 	ldr	x20, [tsk, #TSK_TI_ADDR_LIMIT]
 	str	x20, [sp, #S_ORIG_ADDR_LIMIT]
@@ -202,9 +204,9 @@ alternative_cb_end
 	str	x20, [tsk, #TSK_TI_ADDR_LIMIT]
 	/* No need to reset PSTATE.UAO, hardware's already set it to 0 for us */
 	.endif /* \el == 0 */
-	mrs	x22, elr_el1
-	mrs	x23, spsr_el1
-	stp	lr, x21, [sp, #S_LR]
+	mrs	x22, elr_el1        //读取elr_el1
+	mrs	x23, spsr_el1       //读取spsr_el1
+	stp	lr, x21, [sp, #S_LR]    //存储lr寄存器和x21寄存器(x21存储的原来的sp_el0)
 
 	/*
 	 * In order to be able to dump the contents of struct pt_regs at the
@@ -212,11 +214,12 @@ alternative_cb_end
 	 * stack later), chain it together with the stack frames.
 	 */
 	.if \el == 0
-	stp	xzr, xzr, [sp, #S_STACKFRAME]
+	stp	xzr, xzr, [sp, #S_STACKFRAME]   //设置为0?
 	.else
+    //不是el0 设置x29(fp)和x22(elr_el1) //实际上这是在构造栈
 	stp	x29, x22, [sp, #S_STACKFRAME]
 	.endif
-	add	x29, sp, #S_STACKFRAME
+	add	x29, sp, #S_STACKFRAME          //赋值fp
 
 #ifdef CONFIG_ARM64_SW_TTBR0_PAN
 	/*
@@ -255,7 +258,7 @@ alternative_else_nop_endif
 	 * Set sp_el0 to current thread_info.
 	 */
 	.if	\el == 0
-	msr	sp_el0, tsk
+	msr	sp_el0, tsk         //将tsk写入sp_el0
 	.endif
 
 	/*
@@ -316,7 +319,7 @@ alternative_else_nop_endif
 
 	.if	\el == 0
 	ldr	x23, [sp, #S_SP]		// load return stack pointer
-	msr	sp_el0, x23
+	msr	sp_el0, x23             //写入sp_el0
 	tst	x22, #PSR_MODE32_BIT		// native task?
 	b.eq	3f
 
@@ -403,6 +406,7 @@ alternative_insn eret, nop, ARM64_UNMAP_KERNEL_AT_EL0
 	.endm
 
 /* GPRs used by entry code */
+//tsk实际上是一个寄存器，是x28寄存器的别名
 tsk	.req	x28		// current thread_info
 
 /*
@@ -907,7 +911,7 @@ ENDPROC(ret_to_user)
  */
 	.align	6
 el0_svc:
-	mov	x0, sp
+	mov	x0, sp          //将sp赋值x0, 这个实际上是为了传递参数, sp指向的是pt_regs 首地址
 	bl	el0_svc_handler
 	b	ret_to_user
 ENDPROC(el0_svc)

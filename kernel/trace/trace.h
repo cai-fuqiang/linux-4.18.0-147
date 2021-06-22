@@ -260,7 +260,7 @@ struct trace_array {
 	struct list_head	systems;
 	struct list_head	events;
 	struct trace_event_file *trace_marker_file;
-	cpumask_var_t		tracing_cpumask; /* only trace on set CPUs */
+	cpumask_var_t		tracing_cpumask; /* only trace on set CPUs */   //只有这个位图中的CPU才允许被trace
 	int			ref;
 #ifdef CONFIG_FUNCTION_TRACER
 	struct ftrace_ops	*ops;

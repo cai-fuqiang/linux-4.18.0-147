@@ -29,8 +29,8 @@
 
 /* int __guest_enter(struct kvm_vcpu *vcpu, struct kvm_cpu_context *host) */
 ENTRY(__guest_enter)
-	@ Save host registers
-	add	r1, r1, #(USR_REGS_OFFSET + S_R4)
+	@ Save host registers                       //保存host reg
+	add	r1, r1, #(USR_REGS_OFFSET + S_R4)       //
 	stm	r1!, {r4-r12}
 	str	lr, [r1, #4]	@ Skip SP_usr (already saved)
 
@@ -52,7 +52,7 @@ ENTRY(__guest_exit)
 	 */
 
 	add	r2, r0, #(VCPU_GUEST_CTXT + USR_REGS_OFFSET + S_R3)
-	stm	r2!, {r3-r12}
+	stm	r2!, {r3-r12}       
 	str	lr, [r2, #4]
 	add	r2, r0, #(VCPU_GUEST_CTXT + USR_REGS_OFFSET + S_R0)
 	pop	{r3, r4, r5}		@ r0, r1, r2

@@ -97,14 +97,14 @@ extern u32 __kvm_get_mdcr_el2(void);
 
 .macro hyp_adr_this_cpu reg, sym, tmp
 	adr_l	\reg, \sym
-	mrs	\tmp, tpidr_el2
+	mrs	\tmp, tpidr_el2 
 	add	\reg, \reg, \tmp
 .endm
 
 .macro hyp_ldr_this_cpu reg, sym, tmp
-	adr_l	\reg, \sym
-	mrs	\tmp, tpidr_el2
-	ldr	\reg,  [\reg, \tmp]
+	adr_l	\reg, \sym              //将sym的地址存放到reg中
+	mrs	\tmp, tpidr_el2             //存放的是栈顶,栈底存放的是sym
+	ldr	\reg,  [\reg, \tmp]         //实际上得到的是
 .endm
 
 .macro get_host_ctxt reg, tmp

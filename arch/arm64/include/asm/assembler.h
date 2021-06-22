@@ -276,14 +276,14 @@ alternative_endif
 	 * @sym: The name of the per-cpu variable
 	 * @tmp: scratch register
 	 */
-	.macro ldr_this_cpu dst, sym, tmp
-	adr_l	\dst, \sym
+	.macro ldr_this_cpu dst, sym, tmp       //访问到的是this cpu
+	adr_l	\dst, \sym                      //adr_l 可以得到sym的地址
 alternative_if_not ARM64_HAS_VIRT_HOST_EXTN
 	mrs	\tmp, tpidr_el1
 alternative_else
-	mrs	\tmp, tpidr_el2
+	mrs	\tmp, tpidr_el2                     //这里面存放的是per-cpu offset
 alternative_endif
-	ldr	\dst, [\dst, \tmp]
+	ldr	\dst, [\dst, \tmp]                  //通过这个可以得到this cpu var
 	.endm
 
 /*

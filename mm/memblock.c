@@ -33,7 +33,7 @@ static struct memblock_region memblock_reserved_init_regions[INIT_MEMBLOCK_REGIO
 static struct memblock_region memblock_physmem_init_regions[INIT_PHYSMEM_REGIONS] __initdata_memblock;
 #endif
 
-struct memblock memblock __initdata_memblock = {
+struct memblock memblock __initdata_memblock = {    //memblock定义变量地址
 	.memory.regions		= memblock_memory_init_regions,
 	.memory.cnt		= 1,	/* empty dummy entry */
 	.memory.max		= INIT_MEMBLOCK_REGIONS,
@@ -51,8 +51,8 @@ struct memblock memblock __initdata_memblock = {
 	.physmem.name		= "physmem",
 #endif
 
-	.bottom_up		= false,
-	.current_limit		= MEMBLOCK_ALLOC_ANYWHERE,
+	.bottom_up		= false,                        //自下而上
+	.current_limit		= MEMBLOCK_ALLOC_ANYWHERE,  //没有限制
 };
 
 int memblock_debug __initdata_memblock;
@@ -1272,7 +1272,7 @@ phys_addr_t __init memblock_alloc_try_nid(phys_addr_t size, phys_addr_t align, i
 static void * __init memblock_virt_alloc_internal(
 				phys_addr_t size, phys_addr_t align,
 				phys_addr_t min_addr, phys_addr_t max_addr,
-				int nid, bool exact_nid)
+				int nid, bool exact_nid)        //nid指定node
 {
 	phys_addr_t alloc;
 	void *ptr;
@@ -1300,6 +1300,7 @@ again:
 	if (alloc && !memblock_reserve(alloc, size))
 		goto done;
 
+    //如果走到这里, 尝试在其他节点上寻找
 	if (nid != NUMA_NO_NODE && !exact_nid) {
 		alloc = memblock_find_in_range_node(size, align, min_addr,
 						    max_addr, NUMA_NO_NODE,
@@ -1322,7 +1323,7 @@ again:
 
 	return NULL;
 done:
-	ptr = phys_to_virt(alloc);
+	ptr = phys_to_virt(alloc);      //返回虚拟地址
 
 	/* Skip kmemleak for kasan_init() due to high volume. */
 	if (max_addr != MEMBLOCK_ALLOC_KASAN)

@@ -1009,8 +1009,11 @@ static enum page_references page_check_references(struct page *page,
 	int referenced_ptes, referenced_page;
 	unsigned long vm_flags;
 
+    //计算被访问过的PTE数量
 	referenced_ptes = page_referenced(page, 1, sc->target_mem_cgroup,
 					  &vm_flags);
+
+    //读取page引用标志位，并清楚标志位
 	referenced_page = TestClearPageReferenced(page);
 
 	/*
@@ -1020,7 +1023,9 @@ static enum page_references page_check_references(struct page *page,
 	if (vm_flags & VM_LOCKED)
 		return PAGEREF_RECLAIM;
 
+    //如果有引用的ptes
 	if (referenced_ptes) {
+        //匿名页面，并重新链接到active list
 		if (PageSwapBacked(page))
 			return PAGEREF_ACTIVATE;
 		/*
@@ -1037,7 +1042,7 @@ static enum page_references page_check_references(struct page *page,
 		 * so that recently deactivated but used pages are
 		 * quickly recovered.
 		 */
-		SetPageReferenced(page);
+		SetPageReferenced(page);        //这里是file pages
 
 		if (referenced_page || referenced_ptes > 1)
 			return PAGEREF_ACTIVATE;
@@ -1045,13 +1050,15 @@ static enum page_references page_check_references(struct page *page,
 		/*
 		 * Activate file-backed executable pages after first usage.
 		 */
+        //可执行文件页面，重新连接到active list
 		if (vm_flags & VM_EXEC)
 			return PAGEREF_ACTIVATE;
-
+        //如果只有引用pte则继续保留在inactive list
 		return PAGEREF_KEEP;
 	}
 
 	/* Reclaim if clean, defer dirty pages to writeback */
+    //如果是clean的，推迟dirty pages to writeback
 	if (referenced_page && !PageSwapBacked(page))
 		return PAGEREF_RECLAIM_CLEAN;
 
@@ -1258,14 +1265,14 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			}
 		}
         //到这里实际上已经不是writeback的page了
-		if (!force_reclaim)
+		if (!force_reclaim)             //如果是false 可以走到这里面
             //查看是否最近被访问过,返回处理方式
 			references = page_check_references(page, sc);
 
 		switch (references) {
-		case PAGEREF_ACTIVATE:
+		case PAGEREF_ACTIVATE:          //挂在active list
 			goto activate_locked;
-		case PAGEREF_KEEP:
+		case PAGEREF_KEEP:              //继续保留
 			nr_ref_keep++;
 			goto keep_locked;
 		case PAGEREF_RECLAIM:
@@ -1382,8 +1389,8 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 				goto activate_locked;
 			}
 
-			if (references == PAGEREF_RECLAIM_CLEAN)
-				goto keep_locked;
+			if (references == PAGEREF_RECLAIM_CLEAN)    //如果是这个
+				goto keep_locked;                       //则保持locked
 			if (!may_enter_fs)                      //如果是出在fs的上下文
 				goto keep_locked;
 			if (!sc->may_writepage)                 //没有may_writepage
@@ -2191,7 +2198,7 @@ static void shrink_active_list(unsigned long nr_to_scan,
 			}
 		}
 
-		if (page_referenced(page, 0, sc->target_mem_cgroup,
+		if (page_referenced(page, 0, sc->target_mem_cgroup,     //最近有使用
 				    &vm_flags)) {
 			nr_rotated += hpage_nr_pages(page);
 			/*
