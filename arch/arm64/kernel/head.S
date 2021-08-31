@@ -45,7 +45,7 @@
 
 #include "efi-header.S"
 
-#define __PHYS_OFFSET	(KERNEL_START - TEXT_OFFSET)
+#define __PHYS_OFFSET	(KERNEL_START - TEXT_OFFSET)        //这个_text是一个符号，代表text段得地址
 
 #if (TEXT_OFFSET & 0xfff) != 0
 #error TEXT_OFFSET must be at least 4KB aligned
@@ -80,7 +80,7 @@ _head:
 	 * This add instruction has no meaningful effect except that
 	 * its opcode forms the magic "MZ" signature required by UEFI.
 	 */
-	add	x13, x18, #0x16
+	add	x13, x18, #0x16                     //这个地方是MZ-HEADER
 	b	stext
 #else
 	b	stext				// branch to kernel start, magic
@@ -117,8 +117,8 @@ pe_header:
 ENTRY(stext)
 	bl	preserve_boot_args
 	bl	el2_setup			// Drop to EL1, w0=cpu_boot_mode
-	adrp	x23, __PHYS_OFFSET
-	and	x23, x23, MIN_KIMG_ALIGN - 1	// KASLR offset, defaults to 0
+	adrp	x23, __PHYS_OFFSET          //这个偏移加进去, 这是一个常量
+	and	x23, x23, MIN_KIMG_ALIGN - 1	// KASLR offset, defaults to 0, 先设置KASLR offset先设置成0
 	bl	set_cpu_boot_mode_flag
 	bl	__create_page_tables
 	/*
@@ -135,17 +135,17 @@ ENDPROC(stext)
  * Preserve the arguments passed by the bootloader in x0 .. x3
  */
 preserve_boot_args:
-	mov	x21, x0				// x21=FDT
+	mov	x21, x0				// x21=FDT                          //将fdt地址放在x21寄存器中
 
-	adr_l	x0, boot_args			// record the contents of
-	stp	x21, x1, [x0]			// x0 .. x3 at kernel entry
-	stp	x2, x3, [x0, #16]
+	adr_l	x0, boot_args			// record the contents of   
+	stp	x21, x1, [x0]			// x0 .. x3 at kernel entry     //将x21 和x1 压入内存
+	stp	x2, x3, [x0, #16]                                       //压入x2, x3, ARM64 boot protocol
 
 	dmb	sy				// needed before dc ivac with
 						// MMU off
 
 	mov	x1, #0x20			// 4 x 8 bytes
-	b	__inval_dcache_area		// tail call
+	b	__inval_dcache_area		// tail call                    //让dcache无效
 ENDPROC(preserve_boot_args)
 
 /*
@@ -295,7 +295,7 @@ __create_page_tables:
 	 */
 	adrp	x0, init_pg_dir
 	adrp	x1, init_pg_end
-	sub	x1, x1, x0
+	sub	x1, x1, x0          //算出size
 	bl	__inval_dcache_area
 
 	/*
@@ -303,12 +303,12 @@ __create_page_tables:
 	 */
 	adrp	x0, init_pg_dir
 	adrp	x1, init_pg_end
-	sub	x1, x1, x0
+	sub	x1, x1, x0              //x1 指的是size
 1:	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
-	subs	x1, x1, #64
+	subs	x1, x1, #64         //x1 = x1 -64
 	b.ne	1b
 
 	mov	x7, SWAPPER_MM_MMUFLAGS
@@ -320,7 +320,7 @@ __create_page_tables:
 	adrp	x3, __idmap_text_start		// __pa(__idmap_text_start)
 
 #ifdef CONFIG_ARM64_USER_VA_BITS_52
-	mrs_s	x6, SYS_ID_AA64MMFR2_EL1
+	mrs_s	x6, SYS_ID_AA64MMFR2_EL1    //读操作
 	and	x6, x6, #(0xf << ID_AA64MMFR2_LVA_SHIFT)
 	mov	x5, #52
 	cbnz	x6, 1f
@@ -454,9 +454,9 @@ __primary_switched:
 	tst	x23, ~(MIN_KIMG_ALIGN - 1)	// already running randomized?
 	b.ne	0f
 	mov	x0, x21				// pass FDT address in x0
-	bl	kaslr_early_init		// parse FDT for KASLR options
-	cbz	x0, 0f				// KASLR disabled? just proceed
-	orr	x23, x23, x0			// record KASLR offset
+	bl	kaslr_early_init		// parse FDT for KASLR options      返回值实际上是offset
+	cbz	x0, 0f				// KASLR disabled? just proceed         返回值是0直接跳转
+	orr	x23, x23, x0			// record KASLR offset              或上这个offset ?
 	ldp	x29, x30, [sp], #16		// we must enable KASLR, return
 	ret					// to __primary_switch()
 0:
@@ -849,18 +849,18 @@ __relocate_kernel:
 	ldr	w10, =__rela_size		// size of reloc table
 
 	mov_q	x11, KIMAGE_VADDR		// default virtual offset
-	add	x11, x11, x23			// actual virtual offset
-	add	x9, x9, x11			// __va(.rela)
-	add	x10, x9, x10			// __va(.rela) + sizeof(.rela)
+	add	x11, x11, x23			// actual virtual offset            //x23感觉是具体的偏移量
+	add	x9, x9, x11			// __va(.rela)                          //虚拟地址
+	add	x10, x9, x10			// __va(.rela) + sizeof(.rela)      //end的虚拟地址
 
 0:	cmp	x9, x10
 	b.hs	1f
-	ldp	x11, x12, [x9], #24
-	ldr	x13, [x9, #-8]
+	ldp	x11, x12, [x9], #24     //x11表示offset, x12表示info
+	ldr	x13, [x9, #-8]          //x13表示r_addend?
 	cmp	w12, #R_AARCH64_RELATIVE
 	b.ne	0b
-	add	x13, x13, x23			// relocate
-	str	x13, [x11, x23]
+	add	x13, x13, x23			//relocate
+	str	x13, [x11, x23]         //写入[x11 + x23]内存中
 	b	0b
 1:	ret
 ENDPROC(__relocate_kernel)

@@ -63,7 +63,7 @@ efi_status_t handle_kernel_image(efi_system_table_t *sys_table_arg,
 			status = efi_get_random_bytes(sys_table_arg,
 						      sizeof(phys_seed),
 						      (u8 *)&phys_seed);
-			if (status == EFI_NOT_FOUND) {
+			if (status == EFI_NOT_FOUND) {          //arm64 走的这个
 				pr_efi(sys_table_arg, "EFI_RNG_PROTOCOL unavailable, no randomness supplied\n");
 			} else if (status != EFI_SUCCESS) {
 				pr_efi_err(sys_table_arg, "efi_get_random_bytes() failed\n");

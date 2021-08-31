@@ -1631,6 +1631,7 @@ static struct buffer_head *create_page_buffers(struct page *page, struct inode *
 	BUG_ON(!PageLocked(page));
 
 	if (!page_has_buffers(page))
+        //在这里面会看该inode的大小
 		create_empty_buffers(page, 1 << READ_ONCE(inode->i_blkbits),
 				     b_state);
 	return page_buffers(page);
@@ -2221,32 +2222,53 @@ int block_read_full_page(struct page *page, get_block_t *get_block)
 	int nr, i;
 	int fully_mapped = 1;
 
+    //这实际上时一个是一个循环链表
 	head = create_page_buffers(page, inode, 0);
 	blocksize = head->b_size;
 	bbits = block_size_bits(blocksize);
 
+    //记录块起始地址(PAGE_SHIFT - bbits), 表示一个页可以包含多少个block
 	iblock = (sector_t)page->index << (PAGE_SHIFT - bbits);
+    //文件末尾
 	lblock = (i_size_read(inode)+blocksize-1) >> bbits;
 	bh = head;
 	nr = 0;
 	i = 0;
 
 	do {
-		if (buffer_uptodate(bh))
+        //Contains valid data ? BH_Uptodate
+		if (buffer_uptodate(bh))        
 			continue;
 
+        //没有disk mapping BH_Mapped
 		if (!buffer_mapped(bh)) {
 			int err = 0;
 
 			fully_mapped = 0;
 			if (iblock < lblock) {
 				WARN_ON(bh->b_size != blocksize);
+                /* 将bh和dev联系到一起, 并且标记bh->b_blocknr
+                 * PS:
+                 *
+                 * bh起到的作用最初是用作block层的缓存，
+                 * 将block设备和page联系到一起
+                 *
+                 * page<---- buffer_head -----> block设备
+                 *
+                 * create_page_buffers创建并将bh 和page联系到一起，
+                 * 下面的动作，实际上是将bh 和 block设备联系到一起
+                 */
 				err = get_block(inode, iblock, bh, 0);
+                //如果失败了，设置page error
 				if (err)
 					SetPageError(page);
 			}
+            //如果还是为建立映射，说明该page实际上意义不大了
+            //未建立映射的原因未知
 			if (!buffer_mapped(bh)) {
+                //将该page初始化
 				zero_user(page, i * blocksize, blocksize);
+                //如果没有错误的话, 设置buffer_uptodate
 				if (!err)
 					set_buffer_uptodate(bh);
 				continue;
@@ -2259,26 +2281,27 @@ int block_read_full_page(struct page *page, get_block_t *get_block)
 				continue;
 		}
 		arr[nr++] = bh;
+        //循环链表, 依次遍历每一个bh
 	} while (i++, iblock++, (bh = bh->b_this_page) != head);
 
 	if (fully_mapped)
 		SetPageMappedToDisk(page);
 
-	if (!nr) {
+	if (!nr) {                          //如果nr == 0，说明近期没有更新
 		/*
 		 * All buffers are uptodate - we can set the page uptodate
 		 * as well. But not if get_block() returned an error.
 		 */
 		if (!PageError(page))
-			SetPageUptodate(page);
+			SetPageUptodate(page);      //page状态更新
 		unlock_page(page);
 		return 0;
 	}
-
+    
 	/* Stage two: lock the buffers */
 	for (i = 0; i < nr; i++) {
 		bh = arr[i];
-		lock_buffer(bh);
+		lock_buffer(bh);                //lock buffer
 		mark_buffer_async_read(bh);
 	}
 

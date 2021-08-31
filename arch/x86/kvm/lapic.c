@@ -2730,15 +2730,15 @@ void kvm_apic_accept_events(struct kvm_vcpu *vcpu)
 	if (test_bit(KVM_APIC_INIT, &pe)) {
 		kvm_vcpu_reset(vcpu, true);
 		if (kvm_vcpu_is_bsp(apic->vcpu))
-			vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
+			vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;            //如果是BSP
 		else
-			vcpu->arch.mp_state = KVM_MP_STATE_INIT_RECEIVED;
+			vcpu->arch.mp_state = KVM_MP_STATE_INIT_RECEIVED;       //收到了INIT
 	}
-	if (test_bit(KVM_APIC_SIPI, &pe) &&
-	    vcpu->arch.mp_state == KVM_MP_STATE_INIT_RECEIVED) {
+	if (test_bit(KVM_APIC_SIPI, &pe) &&                             //收到了SIPI信号
+	    vcpu->arch.mp_state == KVM_MP_STATE_INIT_RECEIVED) {        //如果是这个状态
 		/* evaluate pending_events before reading the vector */
 		smp_rmb();
-		sipi_vector = apic->sipi_vector;
+		sipi_vector = apic->sipi_vector;                            //sipi_vector
 		apic_debug("vcpu %d received sipi with vector # %x\n",
 			 vcpu->vcpu_id, sipi_vector);
 		kvm_vcpu_deliver_sipi_vector(vcpu, sipi_vector);

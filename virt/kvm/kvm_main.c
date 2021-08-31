@@ -2258,7 +2258,7 @@ static int kvm_vcpu_check_block(struct kvm_vcpu *vcpu)
 	int ret = -EINTR;
 	int idx = srcu_read_lock(&vcpu->kvm->srcu);
 
-	if (kvm_arch_vcpu_runnable(vcpu)) {
+	if (kvm_arch_vcpu_runnable(vcpu)) {         //如果是RUNNABLE ，goto out
 		kvm_make_request(KVM_REQ_UNHALT, vcpu);
 		goto out;
 	}
@@ -2308,11 +2308,11 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
 	for (;;) {
 		prepare_to_swait(&vcpu->wq, &wait, TASK_INTERRUPTIBLE);
 
-		if (kvm_vcpu_check_block(vcpu) < 0)
+		if (kvm_vcpu_check_block(vcpu) < 0) //小于0 表示状态改变了
 			break;
 
 		waited = true;
-		schedule();
+		schedule();                     //调度出去了
 	}
 
 	finish_swait(&vcpu->wq, &wait);

@@ -325,7 +325,7 @@ struct perf_event_attr {
 	__u64			config;
 
 	union {
-		__u64		sample_period;
+		__u64		sample_period;          //表示采样的周期
 		__u64		sample_freq;
 	};
 
