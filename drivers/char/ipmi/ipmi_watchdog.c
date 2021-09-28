@@ -539,6 +539,46 @@ static void panic_halt_ipmi_set_timeout(void)
 		ipmi_poll_interface(watchdog_user);
 }
 
+static void print_ipmi_status(void)
+{
+	struct kernel_ipmi_msg msg;
+	int rv;
+	struct ipmi_system_interface_addr addr;
+	int timeout_retries = 0;
+    int i = 0;
+
+	atomic_set(&msg_tofree, 2);
+
+	addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	addr.channel = IPMI_BMC_CHANNEL;
+	addr.lun = 0;
+
+	msg.netfn = 0x06;
+	msg.cmd = IPMI_WDOG_RESET_TIMER;
+	msg.data = NULL;
+	msg.data_len = 0;
+	rv = ipmi_request_supply_msgs(watchdog_user,
+				      (struct ipmi_addr *) &addr,
+				      0,
+				      &msg,
+				      NULL,
+				      &smi_msg,
+				      &recv_msg,
+				      1);
+	if (rv) {
+		pr_warn("heartbeat send failure: %d\n", rv);
+		return rv;
+	}
+
+	/* Wait for the heartbeat to be sent. */
+	wait_for_completion(&msg_wait);
+    pr_info("print the ipmi watchdog state================\n");
+    for (i = 0; i < 9; i++) {
+        pr_info("the ipmi recv data[%d] = %d", i+1, recv_msg.msg.data[i]);
+    }
+    //==============
+}
+
 static int __ipmi_heartbeat(void)
 {
 	struct kernel_ipmi_msg msg;

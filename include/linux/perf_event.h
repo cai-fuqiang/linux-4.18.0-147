@@ -265,6 +265,11 @@ struct pmu {
 	int __percpu			*pmu_disable_count;
 	struct perf_cpu_context __percpu *pmu_cpu_context;
 	atomic_t			exclusive_cnt; /* < 0: cpu; > 0: tsk */
+    /*
+     * pmu->task_ctx_nr 指的是当前的PMU 的类型，类型定义在:
+     * enum perf_event_task_context
+     * 该类型是在定义pmu时初始化的，见结构体变量: perf_swevent
+     */
 	int				task_ctx_nr;
 	int				hrtimer_interval_ms;
 
@@ -731,7 +736,7 @@ struct perf_event_context {
 	struct list_head		active_ctx_list;
 	struct perf_event_groups	pinned_groups;
 	struct perf_event_groups	flexible_groups;
-	struct list_head		event_list;
+	struct list_head		event_list;     //这个串了所有的perf_event entry
 
 	struct list_head		pinned_active;
 	struct list_head		flexible_active;
@@ -775,6 +780,21 @@ struct perf_event_context {
 /**
  * struct perf_event_cpu_context - per cpu event context structure
  */
+/*
+ * NOTE :
+ *
+ * 这里ctx使用的是成员，而task_ctx使用的是指针的原因是:
+ *
+ * ctx 
+ * 表示该perf事件是指定cpu类型的，所以和CPU相关，而
+ * pmu.pmu_cpu_context， 是percpu变量，该成员是不会变的
+ *
+ * *task_ctx
+ * 表示该perf事件是指定task类型的，所以和task相关，其
+ * 是在task_struct.perf_event_ctxp[]中指向，当该进程切换到
+ * 该cpu时，将pmu.pmu_cpu_context.task_ctx指向，所以task_ctx
+ * 的指向是随着进程切换一直变，所以为指针类型
+ */
 struct perf_cpu_context {
 	struct perf_event_context	ctx;
 	struct perf_event_context	*task_ctx;
@@ -786,7 +806,7 @@ struct perf_cpu_context {
 	ktime_t				hrtimer_interval;
 	unsigned int			hrtimer_active;
 
-#ifdef CONFIG_CGROUP_PERF
+#ifdef CONFIG_CGROUP_PERF               //CGROUP PERF ?
 	struct perf_cgroup		*cgrp;
 	struct list_head		cgrp_cpuctx_entry;
 #endif

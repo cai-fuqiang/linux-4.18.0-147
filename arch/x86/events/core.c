@@ -410,7 +410,7 @@ int x86_setup_perfctr(struct perf_event *event)
 	struct hw_perf_event *hwc = &event->hw;
 	u64 config;
 
-	if (!is_sampling_event(event)) {
+	if (!is_sampling_event(event)) {        //如果不是的话
 		hwc->sample_period = x86_pmu.max_period;
 		hwc->last_period = hwc->sample_period;
 		local64_set(&hwc->period_left, hwc->sample_period);
@@ -455,9 +455,10 @@ static inline int precise_br_compat(struct perf_event *event)
 	u64 b = 0;
 
 	/* must capture all branches */
+    //必须获取所有的branches, C这个是precise_ip > 1 时，需要满足的
 	if (!(m & PERF_SAMPLE_BRANCH_ANY))
 		return 0;
-
+    //attr.branch_sample_type必须和 attr.exclude_*对上
 	m &= PERF_SAMPLE_BRANCH_KERNEL | PERF_SAMPLE_BRANCH_USER;
 
 	if (!event->attr.exclude_user)
@@ -494,12 +495,14 @@ int x86_pmu_max_precise(void)
 int x86_pmu_hw_config(struct perf_event *event)
 {
 	if (event->attr.precise_ip) {
+        // 这里可以获取一个最大值，不是很理解
 		int precise = x86_pmu_max_precise();
-
+    
 		if (event->attr.precise_ip > precise)
 			return -EOPNOTSUPP;
 
 		/* There's no sense in having PEBS for non sampling events: */
+        //如果没有sampling event, 使用PEBS是没有意义的, 为什么 ???
 		if (!is_sampling_event(event))
 			return -EINVAL;
 	}
@@ -518,7 +521,7 @@ int x86_pmu_hw_config(struct perf_event *event)
 
 		} else {
 			/*
-			 * user did not specify  branch_sample_type
+			 * user did not specify branch_sample_type
 			 *
 			 * For PEBS fixups, we capture all
 			 * the branches at the priv level of the
@@ -541,16 +544,23 @@ int x86_pmu_hw_config(struct perf_event *event)
 	 * Generate PMC IRQs:
 	 * (keep 'enabled' bit clear for now)
 	 */
+    /*
+     * 开启中断
+     */
 	event->hw.config = ARCH_PERFMON_EVENTSEL_INT;
 
 	/*
 	 * Count user and OS events unless requested not to
 	 */
+    /*
+     * 选择开启user还是OS
+     */
 	if (!event->attr.exclude_user)
 		event->hw.config |= ARCH_PERFMON_EVENTSEL_USR;
 	if (!event->attr.exclude_kernel)
 		event->hw.config |= ARCH_PERFMON_EVENTSEL_OS;
-
+    
+    //拷贝的attr.config中的某些字段
 	if (event->attr.type == PERF_TYPE_RAW)
 		event->hw.config |= event->attr.config & X86_RAW_EVENT_MASK;
 
@@ -579,7 +589,8 @@ static int __x86_pmu_event_init(struct perf_event *event)
 
 	atomic_inc(&active_events);
 	event->destroy = hw_perf_event_destroy;
-
+    
+    //初始化一些值
 	event->hw.idx = -1;
 	event->hw.last_cpu = -1;
 	event->hw.last_tag = ~0ULL;

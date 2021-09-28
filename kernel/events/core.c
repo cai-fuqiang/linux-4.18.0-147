@@ -9604,6 +9604,7 @@ int perf_pmu_register(struct pmu *pmu, const char *name, int type)
 	pmu->name = name;
 
 	if (type < 0) {
+        //当type < 0, 动态type pmu通过idr分配type
 		type = idr_alloc(&pmu_idr, pmu, PERF_TYPE_MAX, 0, GFP_KERNEL);
 		if (type < 0) {
 			ret = type;
@@ -9611,7 +9612,7 @@ int perf_pmu_register(struct pmu *pmu, const char *name, int type)
 		}
 	}
 	pmu->type = type;
-
+    //PMU bus ?
 	if (pmu_bus_running) {
 		ret = pmu_dev_alloc(pmu);
 		if (ret)
@@ -9619,6 +9620,9 @@ int perf_pmu_register(struct pmu *pmu, const char *name, int type)
 	}
 
 skip_type:
+    /*
+     * 如果pmu类型为hw类型
+     */
 	if (pmu->task_ctx_nr == perf_hw_context) {
 		static int hw_context_taken = 0;
 
@@ -9627,26 +9631,36 @@ skip_type:
 		 * sense for two PMUs to share perf_hw_context. PMUs which are
 		 * uncore must use perf_invalid_context.
 		 */
+        /*
+         * 除了具有异构 CPU 的系统外，两个 PMU 共享 perf_hw_context 
+         * 毫无意义。 非核心 PMU 必须使用 perf_invalid_context。
+         *
+         * 这里异构的CPU指的是arm
+         */
 		if (WARN_ON_ONCE(hw_context_taken &&
 		    !(pmu->capabilities & PERF_PMU_CAP_HETEROGENEOUS_CPUS)))
 			pmu->task_ctx_nr = perf_invalid_context;
 
 		hw_context_taken = 1;
 	}
-
+    //找相同的pmu->task_ctx_nr, 共享pmu_cpu_context
 	pmu->pmu_cpu_context = find_pmu_context(pmu->task_ctx_nr);
+    //找到了直接返回
 	if (pmu->pmu_cpu_context)
 		goto got_cpu_context;
 
 	ret = -ENOMEM;
+    //找不到alloc_percpu
 	pmu->pmu_cpu_context = alloc_percpu(struct perf_cpu_context);
 	if (!pmu->pmu_cpu_context)
 		goto free_dev;
 
+    //init percpu perf_cpu_context
 	for_each_possible_cpu(cpu) {
 		struct perf_cpu_context *cpuctx;
 
 		cpuctx = per_cpu_ptr(pmu->pmu_cpu_context, cpu);
+        //init member
 		__perf_event_init_context(&cpuctx->ctx);
 		lockdep_set_class(&cpuctx->ctx.mutex, &cpuctx_mutex);
 		lockdep_set_class(&cpuctx->ctx.lock, &cpuctx_lock);
@@ -9684,7 +9698,8 @@ got_cpu_context:
 
 	if (!pmu->event_idx)
 		pmu->event_idx = perf_event_idx_default;
-
+    
+    //将pmu 加入pmus中
 	list_add_rcu(&pmu->entry, &pmus);
 	atomic_set(&pmu->exclusive_cnt, 0);
 	ret = 0;
@@ -9776,8 +9791,10 @@ static struct pmu *perf_init_event(struct perf_event *event)
 	int ret;
 
 	idx = srcu_read_lock(&pmus_srcu);
-
+    
 	/* Try parent's PMU first: */
+
+    //试下parent pmu
 	if (event->parent && event->parent->pmu) {
 		pmu = event->parent->pmu;
 		ret = perf_try_init_event(pmu, event);
@@ -9786,6 +9803,7 @@ static struct pmu *perf_init_event(struct perf_event *event)
 	}
 
 	rcu_read_lock();
+    //通过idr查找
 	pmu = idr_find(&pmu_idr, event->attr.type);
 	rcu_read_unlock();
 	if (pmu) {
@@ -9794,7 +9812,7 @@ static struct pmu *perf_init_event(struct perf_event *event)
 			pmu = ERR_PTR(ret);
 		goto unlock;
 	}
-
+    //在pmus中查找
 	list_for_each_entry_rcu(pmu, &pmus, entry) {
 		ret = perf_try_init_event(pmu, event);
 		if (!ret)
@@ -9968,7 +9986,6 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
 	INIT_LIST_HEAD(&event->active_entry);
 	INIT_LIST_HEAD(&event->addr_filters.list);
 	INIT_HLIST_NODE(&event->hlist_entry);
-
 
 	init_waitqueue_head(&event->waitq);
 	init_irq_work(&event->pending, perf_pending_event);
@@ -10408,6 +10425,16 @@ again:
  * @cpu:		target cpu
  * @group_fd:		group leader event fd
  */
+/*
+ * 参数的详细解释可以参考:
+ * https://man7.org/linux/man-pages/man2/perf_event_open.2.html
+ *
+ * perf 框架参考:
+ * 简洁:
+ * http://terenceli.github.io/%E6%8A%80%E6%9C%AF/2020/08/29/perf-arch
+ * 详细:
+ * https://blog.csdn.net/pwl999/article/details/81200439
+ */
 SYSCALL_DEFINE5(perf_event_open,
 		struct perf_event_attr __user *, attr_uptr,
 		pid_t, pid, int, cpu, int, group_fd, unsigned long, flags)
@@ -10429,12 +10456,14 @@ SYSCALL_DEFINE5(perf_event_open,
 	/* for future expandability... */
 	if (flags & ~PERF_FLAG_ALL)
 		return -EINVAL;
-
+    //copy attr
 	err = perf_copy_attr(attr_uptr, &attr);
 	if (err)
 		return err;
-
+    
+    //查看attr是否exclude kernel
 	if (!attr.exclude_kernel) {
+        //如果没有的话，查看进程有没有CAP_SYS_ADMIN capability
 		if (perf_paranoid_kernel() && !capable(CAP_SYS_ADMIN))
 			return -EACCES;
 	}
@@ -10443,8 +10472,20 @@ SYSCALL_DEFINE5(perf_event_open,
 		if (!capable(CAP_SYS_ADMIN))
 			return -EACCES;
 	}
-
+	/*
+	 * freq == 1     : sample 则不使用sample_period方式决定采样频率
+	 * freq == 0     : sample 则使用sample_period方式决定采样频率
+	 * sample_freq   : 使用该参数时，kernel 则会调整sampling period 并且
+	 *                 尽量达到期望的频率. 这个值表示的是timer tick
+	 * sample_period : "sampling" event, 表示的是当该event 发生了N次之后，
+	 *                 会触发一个overflow的notifiation, 这里的N, 指的就是
+	 *                 sample_period
+	 */
 	if (attr.freq) {
+		/*
+         * 这里有一个最大值，实际上也就是最大的频率, 定义在
+         * /proc/sys/kernel/perf_event_max_sample_rate
+         */
 		if (attr.sample_freq > sysctl_perf_event_sample_rate)
 			return -EINVAL;
 	} else {
@@ -10453,6 +10494,21 @@ SYSCALL_DEFINE5(perf_event_open,
 	}
 
 	/* Only privileged users can get physical addresses */
+	/*
+	 * 该标记位实现了在per-container范围进行system-wide监控.
+	 * 只有当运行在被监控的CPU运行的进程属于指定的cgroup时,
+	 * 监控事件才会被测量.
+	 *
+	 * cgroup 的指定通过一个文件描述符，该文件描述符通过open 一个在
+	 * cgroupfs 文件系统中的一个目录获取。
+	 *
+	 * eg: cgroup 位test, 假设cgroupfs 挂载在了/dev/cgroup 上, 则需要open
+	 * /dev/cgroup/test目录获取文件描述符，并且通过pid参数传递
+	 *
+	 * NOTE : cgroup monitoring 仅仅可以使用在system-wide events并且
+	 * 可能需要额外的权限
+	 */
+
 	if ((attr.sample_type & PERF_SAMPLE_PHYS_ADDR) &&
 	    perf_paranoid_kernel() && !capable(CAP_SYS_ADMIN))
 		return -EACCES;
@@ -10465,14 +10521,21 @@ SYSCALL_DEFINE5(perf_event_open,
 	 */
 	if ((flags & PERF_FLAG_PID_CGROUP) && (pid == -1 || cpu == -1))
 		return -EINVAL;
-
+	/*
+	 * PERF_FLAG_FD_CLOEXEC : 该标记位会enable close-on-exec标记位在创建的
+	 * event fd上, 在执行execve时，该fd 可以automatically关闭. close-on-exec
+	 * 标记位需要在创建的时候设置，而不是在之后使用fcntl，这样避免了调用
+	 * perf_event_open()线程后调用fcntl()同时，另一个线程在调用fork和evecve
+	 * 的情况
+	 */
 	if (flags & PERF_FLAG_FD_CLOEXEC)
 		f_flags |= O_CLOEXEC;
-
+    
+    //获取文件描述符
 	event_fd = get_unused_fd_flags(f_flags);
 	if (event_fd < 0)
 		return event_fd;
-
+	//group fd相关处理
 	if (group_fd != -1) {
 		err = perf_fget_light(group_fd, &group);
 		if (err)
@@ -10518,15 +10581,22 @@ SYSCALL_DEFINE5(perf_event_open,
 
 	if (flags & PERF_FLAG_PID_CGROUP)
 		cgroup_fd = pid;
-
+	//!!! alloc 一个perf_event结构体并初始化
 	event = perf_event_alloc(&attr, cpu, task, group_leader, NULL,
 				 NULL, NULL, cgroup_fd);
 	if (IS_ERR(event)) {
 		err = PTR_ERR(event);
 		goto err_cred;
 	}
-
+	//如果attr表明需要smaple数据
 	if (is_sampling_event(event)) {
+		/*
+         * 如果pmu没有interrupt的能力, 则返回出错
+         *
+         * 在hw pmu中，经过N个 event之后overflow，hw pmu
+         * 产生一个nmi interrupt, 这里的理解是，如果没有
+         * interrupt这样的机制的话，不好控制
+         */
 		if (event->pmu->capabilities & PERF_PMU_CAP_NO_INTERRUPT) {
 			err = -EOPNOTSUPP;
 			goto err_alloc;
@@ -10538,7 +10608,8 @@ SYSCALL_DEFINE5(perf_event_open,
 	 * any hardware group.
 	 */
 	pmu = event->pmu;
-
+    
+    //如果用户态指定了时钟源，将event->clock设置为用户指定值
 	if (attr.use_clockid) {
 		err = perf_event_set_clock(event, attr.clockid);
 		if (err)
@@ -11708,15 +11779,21 @@ void __init perf_event_init(void)
 
 	idr_init(&pmu_idr);
 
+    //初始化swevent_htable
 	perf_event_init_all_cpus();
 	init_srcu_struct(&pmus_srcu);
+
+    //注册software pmu
 	perf_pmu_register(&perf_swevent, "software", PERF_TYPE_SOFTWARE);
 	perf_pmu_register(&perf_cpu_clock, NULL, -1);
 	perf_pmu_register(&perf_task_clock, NULL, -1);
+
+    //注册tracepoint pmu
 	perf_tp_register();
 	perf_event_init_cpu(smp_processor_id());
 	register_reboot_notifier(&perf_reboot_notifier);
-
+    
+    //注册breakpoint pmu
 	ret = init_hw_breakpoint();
 	WARN(ret, "hw_breakpoint initialization failed with: %d", ret);
 

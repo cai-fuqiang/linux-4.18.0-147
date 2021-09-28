@@ -875,7 +875,7 @@ static inline bool intel_pmu_has_bts_period(struct perf_event *event, u64 period
 
 	if (event->attr.freq)
 		return false;
-
+    //获取event 值
 	hw_event = hwc->config & INTEL_ARCH_EVENT_MASK;
 	bts_event = x86_pmu.event_map(PERF_COUNT_HW_BRANCH_INSTRUCTIONS);
 

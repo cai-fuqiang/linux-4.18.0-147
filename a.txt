@@ -1,0 +1,36 @@
+[61579.388959] watchdog: BUG: soft lockup - CPU#59 stuck for 23s! [migration/59:367]
+[61579.405530] Modules linked in: ebtable_filter ebtables ip6table_filter veth nf_conntrack_netlink nfnetlink ip6table_nat ip6_tables overlay vxlan ip6_udp_tunnel udp_tunnel openvswitch nf_nat_ipv6 nf_conncount ib_isert iscsi_target_mod ib_srpt ipt_REJECT nf_reject_ipv4 iptable_filter xt_conntrack iptable_mangle target_core_mod xt_statistic xt_nat ipt_MASQUERADE xt_comment xt_addrtype xt_recent xt_mark iptable_nat nf_nat_ipv4 nf_nat iptable_raw ib_srp scsi_transport_srp vfat fat rpcrdma rdma_ucm ib_iser ib_umad rdma_cm ib_ipoib iw_cm libiscsi scsi_transport_iscsi ib_cm crc32_ce crct10dif_ce ghash_ce sha2_ce sha256_arm64 sha1_ce mlx5_ib hns_roce_hw_v2 ib_uverbs hns_roce ses enclosure ib_core sg ipmi_si ipmi_devintf ipmi_msghandler gpio_dwapb gpio_generic escache nf_conntrack_ipv6 nf_defrag_ipv6 br_netfilter
+[61579.541742]  nf_conntrack_ipv4 nf_defrag_ipv4 bridge nf_conntrack stp llc nfsd auth_rpcgss nfs_acl lockd grace sunrpc ip_tables xfs realtek hibmc_drm drm_kms_helper syscopyarea sysfillrect sysimgblt fb_sys_fops ttm hns3 mlx5_core drm hisi_sas_v3_hw hisi_sas_main hclge libsas megaraid_sas mlxfw hnae3 scsi_transport_sas devlink nfit i2c_designware_platform libnvdimm i2c_designware_core dm_mirror dm_region_hash dm_log rbd libceph dns_resolver libcrc32c dm_round_robin dm_multipath dm_mod
+[61579.637499] CPU: 59 PID: 367 Comm: migration/59 Kdump: loaded Tainted: G        W    L   --------- -  - 4.18.0-80.11.2.el8.5es.7.aarch64 #1
+[61579.666547] Hardware name: Huawei TaiShan 200 (Model 2280)/BC82AMDDA, BIOS 1.70 01/07/2021
+[61579.691945] pstate: 60c00009 (nZCv daif +PAN +UAO)
+[61579.705380] pc : multi_cpu_stop+0xec/0x148
+[61579.718063] lr : 0x2
+[61579.728464] sp : ffff00001ccefd60
+[61579.739846] x29: ffff00001ccefd60 x28: 0000000000000000
+[61579.753286] x27: ffffa03fc3326438 x26: ffff000042ccf8e8
+[61579.766470] x25: 0000000000000000 x24: 0000000000000000
+[61579.779511] x23: 0000000000000000 x22: 0000000000000001
+[61579.792309] x21: ffff000042ccf984 x20: ffff000042ccf960
+[61579.804930] x19: 0000000000000001 x18: 0000007000000000
+[61579.817401] x17: 0000ffffb88c8c7c x16: 0000aaaad21313b0
+[61579.829683] x15: 00007b5aea84c83d x14: 0038473560dfaa19
+[61579.841805] x13: 00005b3b00000001 x12: 0000000000000001
+[61579.853771] x11: 0000000000000001 x10: 0000000000000d10
+[61579.865497] x9 : ffff00001ccefd40 x8 : ffffa03fc385e970
+[61579.877061] x7 : ffff000042ccf960 x6 : 00000536e3354ddb
+[61579.888574] x5 : 0000000000000001 x4 : ffffa03fc385e200
+[61579.899822] x3 : dead000000000200 x2 : ffff000042ccf938
+[61579.910866] x1 : ffff000042ccf984 x0 : 0000000000000001
+[61579.921747] Call trace:
+[61579.929527]  multi_cpu_stop+0xec/0x148
+[61579.938500]  cpu_stopper_thread+0xb4/0x170
+[61579.947666]  smpboot_thread_fn+0x154/0x1d8
+[61579.956648]  kthread+0x130/0x138
+[61579.964573]  ret_from_fork+0x10/0x18
+
+
+22:9
+19:8
+22:8
+21:8

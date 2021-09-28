@@ -1394,7 +1394,7 @@ void check_disk_size_change(struct gendisk *disk, struct block_device *bdev,
  * This routine is a wrapper for lower-level driver's revalidate_disk
  * call-backs.  It is used to do common pre and post operations needed
  * for all revalidate_disk operations.
- */
+ */         //revalidate
 int revalidate_disk(struct gendisk *disk)
 {
 	struct block_device *bdev;
