@@ -430,6 +430,7 @@ int x86_setup_perfctr(struct perf_event *event)
 	/*
 	 * The generic map:
 	 */
+    //去找generic map
 	config = x86_pmu.event_map(attr->config);
 
 	if (config == 0)
@@ -474,7 +475,7 @@ static inline int precise_br_compat(struct perf_event *event)
 	return m == b;
 }
 
-int x86_pmu_max_precise(void)
+int blk_complete_requestx86_pmu_max_precise(void)
 {
 	int precise = 0;
 
@@ -1066,11 +1067,11 @@ static void x86_pmu_enable(struct pmu *pmu)
 	if (!x86_pmu_initialized())
 		return;
 
-	if (cpuc->enabled)
+	if (cpuc->enabled)          //已经enabled了
 		return;
 
 	if (cpuc->n_added) {
-		int n_running = cpuc->n_events - cpuc->n_added;
+		int n_running = cpuc->n_events - cpuc->n_added;     //有多少正在running的
 		/*
 		 * apply assignment obtained either from
 		 * hw_perf_group_sched_in() or x86_pmu_enable()
@@ -1078,7 +1079,7 @@ static void x86_pmu_enable(struct pmu *pmu)
 		 * step1: save events moving to new counters
 		 */
 		for (i = 0; i < n_running; i++) {
-			event = cpuc->event_list[i];
+			event = cpuc->event_list[i];                    //取所有的cpuc->event_list
 			hwc = &event->hw;
 
 			/*
@@ -1098,7 +1099,7 @@ static void x86_pmu_enable(struct pmu *pmu)
 			if (hwc->state & PERF_HES_STOPPED)
 				hwc->state |= PERF_HES_ARCH;
 
-			x86_pmu_stop(event, PERF_EF_UPDATE);
+			x86_pmu_stop(event, PERF_EF_UPDATE);            //将所有的event stop
 		}
 
 		/*
@@ -1110,10 +1111,10 @@ static void x86_pmu_enable(struct pmu *pmu)
 
 			if (!match_prev_assignment(hwc, cpuc, i))
 				x86_assign_hw_event(event, cpuc, i);
-			else if (i < n_running)
+			else if (i < n_running)                         //i < n_running, 也就是说之前running的event就不要开启了
 				continue;
 
-			if (hwc->state & PERF_HES_ARCH)
+			if (hwc->state & PERF_HES_ARCH)                 //不需要在开启
 				continue;
 
 			x86_pmu_start(event, PERF_EF_RELOAD);
