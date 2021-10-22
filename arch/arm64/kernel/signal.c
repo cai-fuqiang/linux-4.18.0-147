@@ -794,7 +794,7 @@ static void setup_restart_syscall(struct pt_regs *regs)
 static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 {
 	struct task_struct *tsk = current;
-	sigset_t *oldset = sigmask_to_save();
+	sigset_t *oldset = sigmask_to_save();       //current->blocked      当前进程阻塞的信号
 	int usig = ksig->sig;
 	int ret;
 
@@ -809,6 +809,7 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 		else
 			ret = compat_setup_frame(usig, ksig, oldset, regs);
 	} else {
+        //一般走下面
 		ret = setup_rt_frame(usig, ksig, oldset, regs);
 	}
 

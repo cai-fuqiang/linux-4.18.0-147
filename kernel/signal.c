@@ -1013,6 +1013,12 @@ static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 	 * Found a killable thread.  If the signal will be fatal,
 	 * then start taking the whole group down immediately.
 	 */
+    /*
+     * 这里的意思感觉是，当遇到比较严重的信号，例如SIGKILL, SIGSEGV
+     * 这种信号是需要进程exit的，也就是被kill，对于多线程而言，子线程
+     * 也需要被kill，而对于子线程而言，父线程如果是肯定exit的，而子线程
+     * 也无条件exit，所以直接发送的kill信号
+     */
 	if (sig_fatal(p, sig) &&
 	    !(signal->flags & SIGNAL_GROUP_EXIT) &&
 	    !sigismember(&t->real_blocked, sig) &&
@@ -1034,7 +1040,8 @@ static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 			do {
 				task_clear_jobctl_pending(t, JOBCTL_PENDING_MASK);
 				sigaddset(&t->pending.signal, SIGKILL);
-				signal_wake_up(t, 1);
+                //发的是kill信号
+				signal_wake_up(t, 1);       
 			} while_each_thread(p, t);
 			return;
 		}
@@ -1119,7 +1126,7 @@ static int __send_signal(int sig, struct kernel_siginfo *info, struct task_struc
 		override_rlimit = (is_si_special(info) || info->si_code >= 0);
 	else
 		override_rlimit = 0;
-
+    //alloc 一个sigqueue，用于挂在链表上
 	q = __sigqueue_alloc(sig, t, GFP_ATOMIC, override_rlimit);
 	if (q) {
 		list_add_tail(&q->list, &pending->list);
@@ -2543,6 +2550,7 @@ relock:
 			continue;
 		if (ka->sa.sa_handler != SIG_DFL) {
 			/* Run the handler.  */
+            //在这个地方会赋值ka
 			ksig->ka = *ka;
 
 			if (ka->sa.sa_flags & SA_ONESHOT)

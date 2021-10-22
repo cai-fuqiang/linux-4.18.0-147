@@ -271,7 +271,7 @@ get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
 		*fpstate = (void __user *)sp;
 	}
 
-	sp = align_sigframe(sp - frame_size);
+	sp = align_sigframe(sp - frame_size);           //再将sp - ftrame_size
 
 	/*
 	 * If we are on the alternate signal stack and would overflow it, don't.
@@ -465,10 +465,10 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 
 	frame = get_sigframe(&ksig->ka, regs, sizeof(struct rt_sigframe), &fp);
 
-	if (!access_ok(frame, sizeof(*frame)))
+	if (!access_ok(frame, sizeof(*frame)))      //access_ok
 		return -EFAULT;
 
-	if (ksig->ka.sa.sa_flags & SA_SIGINFO) {
+	if (ksig->ka.sa.sa_flags & SA_SIGINFO) {    //这个是可以拷贝一部分信号信息给用户态
 		if (copy_siginfo_to_user(&frame->info, &ksig->info))
 			return -EFAULT;
 	}
@@ -482,6 +482,17 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 		/* Set up to return from userspace.  If provided, use a stub
 		   already in userspace.  */
 		/* x86-64 should always use SA_RESTORER. */
+        /* 
+         * 如果是x86_64 必须使用SA_RESTORER, 但是这个已经被POSIX禁用了,
+         * 经过qemu调试发现，x86_64 确实会有ksig->ka.sa.sa_restorer
+         *
+         * $2 = {ka = {sa = {sa_handler = 0x565da7, sa_flags = 67108864(0x400 0000), 
+         *  sa_restorer = 0x439cf0, 
+         * #define SA_RESTORER	0x04000000
+         *
+         * 439cf0:       48 c7 c0 0f 00 00 00    mov    $0xf,%rax
+         * 439cf7:       0f 05                   syscall
+         */
 		if (ksig->ka.sa.sa_flags & SA_RESTORER) {
 			put_user_ex(ksig->ka.sa.sa_restorer, &frame->pretcode);
 		} else {
@@ -489,7 +500,8 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 			err |= -EFAULT;
 		}
 	} put_user_catch(err);
-
+    
+    //去赋值ftrame->uc.uc_mcontext
 	err |= setup_sigcontext(&frame->uc.uc_mcontext, fp, regs, set->sig[0]);
 	err |= __copy_to_user(&frame->uc.uc_sigmask, set, sizeof(*set));
 
@@ -497,6 +509,7 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 		return -EFAULT;
 
 	/* Set up registers for signal handler */
+    //赋值di, 这个实际上是赋值的第一个参数
 	regs->di = sig;
 	/* In case the signal handler was declared without prototypes */
 	regs->ax = 0;
@@ -505,8 +518,10 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 	   next argument after the signal number on the stack. */
 	regs->si = (unsigned long)&frame->info;
 	regs->dx = (unsigned long)&frame->uc;
+    //赋值ip
 	regs->ip = (unsigned long) ksig->ka.sa.sa_handler;
-
+    
+    //赋值sp为frame的首地址
 	regs->sp = (unsigned long)frame;
 
 	/*
@@ -702,7 +717,7 @@ setup_rt_frame(struct ksignal *ksig, struct pt_regs *regs)
 			return ia32_setup_frame(usig, ksig, cset, regs);
 	} else if (is_x32_frame(ksig)) {
 		return x32_setup_rt_frame(ksig, cset, regs);
-	} else {
+	} else {        //x86_64
 		return __setup_rt_frame(ksig->sig, ksig, set, regs);
 	}
 }
@@ -820,7 +835,7 @@ void do_signal(struct pt_regs *regs)
 	}
 
 	/* Did we come from a system call? */
-	if (syscall_get_nr(current, regs) >= 0) {
+	if (syscall_get_nr(current, regs) >= 0) {       //if syscall
 		/* Restart the system call - no handlers present */
 		switch (syscall_get_error(current, regs)) {
 		case -ERESTARTNOHAND:
