@@ -957,18 +957,23 @@ static bool prepare_signal(int sig, struct task_struct *p, bool force)
  */
 static inline bool wants_signal(int sig, struct task_struct *p)
 {
+    //表明之前有过接收到此信号，但是还没有处理
 	if (sigismember(&p->blocked, sig))
 		return false;
 
+    //该进程正在shutdown
 	if (p->flags & PF_EXITING)
 		return false;
-
+    //如果信号是SIGKILL
 	if (sig == SIGKILL)
 		return true;
-
+    //进程如果是被stop或者被trace
 	if (task_is_stopped_or_traced(p))
 		return false;
-
+    
+    //如果是当前进程，返回true
+    //如果不是当前进程，并且该进程并没有设置TIF_SIGPENDING标记
+    //表示需要该信号
 	return task_curr(p) || !signal_pending(p);
 }
 
@@ -985,6 +990,7 @@ static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 	 */
 	if (wants_signal(sig, p))
 		t = p;
+    //如果不是的话，直接return
 	else if ((type == PIDTYPE_PID) || thread_group_empty(p))
 		/*
 		 * There is just one thread and it does not need to be woken.
@@ -995,6 +1001,7 @@ static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 		/*
 		 * Otherwise try to find a suitable thread.
 		 */
+        //如果不是PIDTYPE_PID
 		t = signal->curr_target;
 		while (!wants_signal(sig, t)) {
 			t = next_thread(t);
@@ -1004,6 +1011,7 @@ static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 				 * Any eligible threads will see
 				 * the signal in the queue soon.
 				 */
+                //找了一圈没有找到
 				return;
 		}
 		signal->curr_target = t;
@@ -1095,7 +1103,10 @@ static int __send_signal(int sig, struct kernel_siginfo *info, struct task_struc
 	if (!prepare_signal(sig, t,
 			from_ancestor_ns || (info == SEND_SIG_PRIV)))
 		goto ret;
-
+    /* 
+     * 如果 != PIDTYPE_PID, 就使用t->signal->shared_pending
+     * 这个shared_pending是多个task_struct 公用
+     */
 	pending = (type != PIDTYPE_PID) ? &t->signal->shared_pending : &t->pending;
 	/*
 	 * Short-circuit ignored signals and support queuing
@@ -1110,6 +1121,9 @@ static int __send_signal(int sig, struct kernel_siginfo *info, struct task_struc
 	/*
 	 * Skip useless siginfo allocation for SIGKILL and kernel threads.
 	 */
+    /*
+     * 如果signal是SIGKILL, 该进程是一个内核线程
+     */
 	if ((sig == SIGKILL) || (t->flags & PF_KTHREAD))
 		goto out_set;
 
@@ -1372,6 +1386,7 @@ int group_send_sig_info(int sig, struct kernel_siginfo *info,
 	int ret;
 
 	rcu_read_lock();
+    //检查是否有权限杀死
 	ret = check_kill_permission(sig, info, p);
 	rcu_read_unlock();
 

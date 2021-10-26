@@ -5,11 +5,15 @@
 #include <linux/rculist.h>
 
 enum pid_type
-{
+{   
+    //process ID
 	PIDTYPE_PID,
+    //Process Group ID
 	PIDTYPE_PGID,
+    //Session ID
 	PIDTYPE_SID,
 #ifndef __GENKSYMS__
+    //THREAD GROUP ID
 	PIDTYPE_TGID,
 #endif
 	PIDTYPE_MAX,
