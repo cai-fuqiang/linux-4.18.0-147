@@ -1420,7 +1420,26 @@ int kill_pid_info(int sig, struct kernel_siginfo *info, struct pid *pid)
 {
 	int error = -ESRCH;
 	struct task_struct *p;
-
+    /*
+     * 关于for()的commit　d36174bc2bce0372693a9cfbdef8b2689c9982cb
+     *
+     * 我这里理解是这样的，当进程创建了一个线程，然后在此线程执行exec
+     * 相关系统调用，其中接收到一个信号，大概过程如下:
+     *
+     *----------------------------------------------------------------------------------------
+     * 进程1                                进程2
+     *                                      创建一个线程
+     *  kill() 进程2的线程
+     *      kill_pid_info()
+     *          p = pid_task()
+     *                                      调用exec()      这个时候实际上进程2的线程就会被销毁
+     *  loop()找到leader
+     *----------------------------------------------------------------------------------------
+     *
+     * 大概如上面这样，当一个进程去创建一个线程，但是该线程去exec时，会销毁进程中除主线程外的
+     * 所有线程，那么这个时候如果进程1已经在前面获取到了pid_task()，那么如果线程此时还未销毁，
+     * 那么将找到thread_group_leader?
+     */
 	for (;;) {
 		rcu_read_lock();
 		p = pid_task(pid, PIDTYPE_PID);
