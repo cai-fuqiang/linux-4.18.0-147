@@ -1167,6 +1167,7 @@ xfs_iread_extents(
 	struct xfs_mount	*mp = ip->i_mount;
 	int			state = xfs_bmap_fork_to_state(whichfork);
 	struct xfs_ifork	*ifp = XFS_IFORK_PTR(ip, whichfork);
+    //extents num
 	xfs_extnum_t		nextents = XFS_IFORK_NEXTENTS(ip, whichfork);
 	struct xfs_btree_block	*block = ifp->if_broot;
 	struct xfs_iext_cursor	icur;
@@ -1179,7 +1180,8 @@ xfs_iread_extents(
 	int			error;
 
 	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL));
-
+        
+    //如果不是btree类型的, 
 	if (unlikely(XFS_IFORK_FORMAT(ip, whichfork) != XFS_DINODE_FMT_BTREE)) {
 		XFS_ERROR_REPORT(__func__, XFS_ERRLEVEL_LOW, mp);
 		return -EFSCORRUPTED;
@@ -5150,6 +5152,11 @@ done:
  * that value.  If not all extents in the block range can be removed then
  * *done is set.
  */
+/*
+ * 这里是为了从一个文件中remove blocks
+ *
+ * 这里的nexts会限制，当该值> 0 时，一次的translate，最多清除多少的extents. 
+ */
 int						/* error */
 __xfs_bunmapi(
 	struct xfs_trans	*tp,		/* transaction pointer */
@@ -5186,6 +5193,7 @@ __xfs_bunmapi(
 	ASSERT(whichfork != XFS_COW_FORK);
 	ifp = XFS_IFORK_PTR(ip, whichfork);
 	if (unlikely(
+        //如果不是btree/extents的情况
 	    XFS_IFORK_FORMAT(ip, whichfork) != XFS_DINODE_FMT_EXTENTS &&
 	    XFS_IFORK_FORMAT(ip, whichfork) != XFS_DINODE_FMT_BTREE)) {
 		XFS_ERROR_REPORT("xfs_bunmapi", XFS_ERRLEVEL_LOW,
@@ -5209,8 +5217,12 @@ __xfs_bunmapi(
 		max_len = min(len, xfs_refcount_max_unmap(tp->t_log_res));
 	else
 		max_len = len;
-
-	if (!(ifp->if_flags & XFS_IFEXTENTS) &&
+        
+    /*
+     * 这里我觉得是这样的，如果不是BTREE的话，实际上数据会在读
+     * inode时候，读进来
+     */
+	if (!(ifp->if_flags & XFS_IFEXTENTS) &&         //如果不是IFXTENTS
 	    (error = xfs_iread_extents(tp, ip, whichfork)))
 		return error;
 	if (xfs_iext_count(ifp) == 0) {
