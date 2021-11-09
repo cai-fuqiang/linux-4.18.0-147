@@ -161,19 +161,23 @@ xlog_grant_add_space(
 
 	do {
 		int		tmp;
+        //这里cycle代表循环了几次
+        //space 代表使用的空间
 		int		cycle, space;
 
 		xlog_crack_grant_head_val(head_val, &cycle, &space);
-
+        //tmp 代表剩余的空间??
 		tmp = log->l_logsize - space;
 		if (tmp > bytes)
 			space += bytes;
 		else {
+            //这样的计算说明是一个ring buffer
 			space = bytes - tmp;
 			cycle++;
 		}
 
 		old = head_val;
+        //生成新的head值
 		new = xlog_assign_grant_head_val(cycle, space);
 		head_val = atomic64_cmpxchg(head, old, new);
 	} while (head_val != old);
