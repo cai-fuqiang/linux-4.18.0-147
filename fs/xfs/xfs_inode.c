@@ -1534,6 +1534,10 @@ xfs_itruncate_clear_reflink_flags(
  * that returns to it whether errors occur or not.  We don't mark the inode
  * dirty on error so that transactions can be easily aborted if possible.
  */
+/*
+ * 这个接口用于将inode截取到一个新的size，并且这个size要比旧的size要小，其
+ * 可以用作attr或者data fork，并且可以不修改inode size，这个要看caller怎么使用。
+ */
 int
 xfs_itruncate_extents_flags(
 	struct xfs_trans	**tpp,
@@ -1572,6 +1576,10 @@ xfs_itruncate_extents_flags(
 	 * beyond the maximum file size (ie it is the same as last_block),
 	 * then there is nothing to do.
 	 */
+    //这里说明了last_block为什么要选用m_super->s_maxbytes, 大概意思
+    //是可能该文件已经分配了超过了inode_size意外的空间，这个发生在当
+    //系统crash的时候，如果当crash时，space已经分配了，但是没有更新
+    //inode size就会发生这个情况
 	first_unmap_block = XFS_B_TO_FSB(mp, (xfs_ufsize_t)new_size);
 	last_block = XFS_B_TO_FSB(mp, mp->m_super->s_maxbytes);
 	if (first_unmap_block == last_block)
@@ -1715,6 +1723,7 @@ xfs_inactive_truncate(
 	struct xfs_trans	*tp;
 	int			error;
 
+    //xfs trans 和记录这xfs事务
 	error = xfs_trans_alloc(mp, &M_RES(mp)->tr_itruncate, 0, 0, 0, &tp);
 	if (error) {
 		ASSERT(XFS_FORCED_SHUTDOWN(mp));
@@ -1728,6 +1737,7 @@ xfs_inactive_truncate(
 	 * of a system crash before the truncate completes. See the related
 	 * comment in xfs_vn_setattr_size() for details.
 	 */
+    //先将di_size清空
 	ip->i_d.di_size = 0;
 	xfs_trans_log_inode(tp, ip, XFS_ILOG_CORE);
 
@@ -1894,7 +1904,7 @@ xfs_inactive(
 
 	if (S_ISLNK(VFS_I(ip)->i_mode))
 		error = xfs_inactive_symlink(ip);
-	else if (truncate)
+	else if (truncate)      //需要做truncate的操作
 		error = xfs_inactive_truncate(ip);
 	if (error)
 		return;

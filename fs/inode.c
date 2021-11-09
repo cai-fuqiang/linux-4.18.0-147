@@ -537,6 +537,10 @@ EXPORT_SYMBOL(clear_inode);
  * the cache. This should occur atomically with setting the I_FREEING state
  * flag, so no inodes here should ever be on the LRU when being evicted.
  */
+/*
+ * free传进来的inode，将他remove from 他所保持连接的list. 我们移除所有的pages
+ * attached to the inode，并且在destroy inode之前等待进程中任何IO完成。
+ */
 static void evict(struct inode *inode)
 {
 	const struct super_operations *op = inode->i_sb->s_op;
@@ -575,6 +579,7 @@ static void evict(struct inode *inode)
 	BUG_ON(inode->i_state != (I_FREEING | I_CLEAR));
 	spin_unlock(&inode->i_lock);
 
+    //在最后调用destroy inode
 	destroy_inode(inode);
 }
 

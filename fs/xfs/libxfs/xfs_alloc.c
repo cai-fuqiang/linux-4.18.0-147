@@ -1780,6 +1780,7 @@ xfs_free_ag_extent(
 			 * space was invalid, it's (partly) already free.
 			 * Very bad.
 			 */
+            //!!!!!!! 在这一行打印的
 			XFS_WANT_CORRUPTED_GOTO(mp, gtbno >= bno + len, error0);
 		}
 	}

@@ -919,6 +919,10 @@ xfs_iext_remove(
  * If bno is beyond the last extent return false, and return an invalid
  * cursor value.
  */
+/*
+ * 查看extent是否会covering这个bno
+ *
+ */
 bool
 xfs_iext_lookup_extent(
 	struct xfs_inode	*ip,
