@@ -3618,6 +3618,9 @@ xfs_log_calc_unit_res(
 	 *   The commit-rec is smaller than padding in this scenario and so it is
 	 *   not added separately.
 	 */
+    /*
+     *
+     */
 
 	/* for trans header */
 	unit_bytes += sizeof(xlog_op_header_t);
