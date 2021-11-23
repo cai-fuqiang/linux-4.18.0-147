@@ -200,6 +200,12 @@ static int percpu_counter_cpu_dead(unsigned int cpu)
  * Compare counter against given value.
  * Return 1 if greater, 0 if equal and -1 if less
  */
+/*
+ * 这个函数分为两个步骤:
+ * 1. 先使用percpu_counter_read获取一个粗略的值，这个粗略的值获取
+ * 不需要加锁，是一个per_cpu变量, 但是会有误差，误差就是每个cpu
+ * 可能最多会少加一次。
+ */
 int __percpu_counter_compare(struct percpu_counter *fbc, s64 rhs, s32 batch)
 {
 	s64	count;

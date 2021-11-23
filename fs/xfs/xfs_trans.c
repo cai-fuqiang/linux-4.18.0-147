@@ -186,6 +186,9 @@ xfs_trans_reserve(
 	/*
 	 * Reserve the log space needed for this transaction.
 	 */
+    /*
+     * 去预留 log space
+     */
 	if (resp->tr_logres > 0) {
 		bool	permanent = false;
 

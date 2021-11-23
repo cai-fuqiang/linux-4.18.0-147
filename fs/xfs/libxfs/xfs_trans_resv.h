@@ -18,6 +18,9 @@ struct xfs_trans_res {
 				 * a reservation request is permanent or not */
 };
 
+/*
+ * 这个数据结构会记录做一些操作，需要预留的空间是多少
+ */
 struct xfs_trans_resv {
 	struct xfs_trans_res	tr_write;	/* extent alloc trans */
 	struct xfs_trans_res	tr_itruncate;	/* truncate trans */

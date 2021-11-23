@@ -1274,6 +1274,13 @@ xfs_mod_ifree(
  * a large batch count (1024) to minimise global counter updates except when
  * we get near to ENOSPC and we have to be very accurate with our updates.
  */
+/*
+ * 块计数的增量可以从 1 变化到非常大，但锁争用只发生在频繁的小块计数更新中，
+ * 例如在缓冲写入的延迟分配路径中（页面时间更新）。因此我们设置了一个大批量
+ * 计数（1024 ) 以尽量减少全局计数器更新，除非我们接近 ENOSPC 并且我们必须\
+ * 非常准确地进行更新。
+ */
+
 #define XFS_FDBLOCKS_BATCH	1024
 int
 xfs_mod_fdblocks(
@@ -1319,28 +1326,34 @@ xfs_mod_fdblocks(
 	 */
 	if (__percpu_counter_compare(&mp->m_fdblocks, 2 * XFS_FDBLOCKS_BATCH,
 				     XFS_FDBLOCKS_BATCH) < 0)
-		batch = 1;
+		batch = 1;          //batch设置为1, 这样的话，abs(delta)>1, 就会更新fbc->count
 	else
-		batch = XFS_FDBLOCKS_BATCH;
+		batch = XFS_FDBLOCKS_BATCH;             //1024
 
 	percpu_counter_add_batch(&mp->m_fdblocks, delta, batch);
+    //没有达到了不可用的空间
 	if (__percpu_counter_compare(&mp->m_fdblocks, mp->m_alloc_set_aside,
 				     XFS_FDBLOCKS_BATCH) >= 0) {
 		/* we had space! */
 		return 0;
 	}
-
+    //达到了不可用的空间，需要将空间在减去
 	/*
 	 * lock up the sb for dipping into reserves before releasing the space
 	 * that took us to ENOSPC.
 	 */
 	spin_lock(&mp->m_sb_lock);
 	percpu_counter_add(&mp->m_fdblocks, -delta);
+    //如果没有这个标记，直接goto no space
+    //这个是有tp->flags & XFS_TRANS_RESERVE,决定
+    //是和每个事务相关，表示该事务是否可以使用xfs
+    //的预留空间
 	if (!rsvd)
 		goto fdblocks_enospc;
 
 	lcounter = (long long)mp->m_resblks_avail + delta;
 	if (lcounter >= 0) {
+        //更改预留空间
 		mp->m_resblks_avail = lcounter;
 		spin_unlock(&mp->m_sb_lock);
 		return 0;
