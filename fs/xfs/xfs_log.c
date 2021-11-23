@@ -1630,6 +1630,13 @@ xlog_commit_record(
  * pushes on an lsn which is further along in the log once we reach the high
  * water mark.  In this manner, we would be creating a low water mark.
  */
+/*
+ * 发动buffer cache code (flush -> disk ?) 如果我们使用了超过75%的on-disk log
+ * space.
+ *
+ * 这里表示会采用一个water mark的策略，当达到高水位线时，就会去push on an further
+ * lsn
+ */
 STATIC void
 xlog_grant_push_ail(
 	struct xlog	*log,
