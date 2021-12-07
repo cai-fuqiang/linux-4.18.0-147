@@ -34,6 +34,9 @@
 #include <asm/msr-index.h>
 
 ENTRY(verify_cpu)
+    /*
+     * pushf: push lower 16 bit of EFLAGS intel-man:4-526
+     */
 	pushf				# Save caller passed flags
 	push	$0			# Kill any dangerous flags
 	popf
@@ -57,21 +60,21 @@ ENTRY(verify_cpu)
 	jb	.Lverify_cpu_no_longmode	# no cpuid 1
 
 	xor	%di,%di
-	cmpl	$0x68747541,%ebx	# AuthenticAMD
+	cmpl	$0x68747541,%ebx	# AuthenticAMD   "Auth"
 	jnz	.Lverify_cpu_noamd
-	cmpl	$0x69746e65,%edx
+	cmpl	$0x69746e65,%edx    # "enti"
 	jnz	.Lverify_cpu_noamd
-	cmpl	$0x444d4163,%ecx
+	cmpl	$0x444d4163,%ecx    # "cAmd"
 	jnz	.Lverify_cpu_noamd
 	mov	$1,%di			# cpu is from AMD
 	jmp	.Lverify_cpu_check
 
 .Lverify_cpu_noamd:
-	cmpl	$0x756e6547,%ebx        # GenuineIntel?
+	cmpl	$0x756e6547,%ebx        # GenuineIntel? "Genu"
 	jnz	.Lverify_cpu_check
-	cmpl	$0x49656e69,%edx
+	cmpl	$0x49656e69,%edx        # "ineI"
 	jnz	.Lverify_cpu_check
-	cmpl	$0x6c65746e,%ecx
+	cmpl	$0x6c65746e,%ecx        # "ntel"
 	jnz	.Lverify_cpu_check
 
 	# only call IA32_MISC_ENABLE when:
@@ -79,10 +82,18 @@ ENTRY(verify_cpu)
 	movl	$0x1, %eax		# check CPU family and model
 	cpuid
 	movl	%eax, %ecx
-
+    /*
+     * 0xf00 : family
+     * 0xff0 0000: Extended family
+     */
 	andl	$0x0ff00f00, %eax	# mask family and extended family
 	shrl	$8, %eax
-	cmpl	$6, %eax
+	cmpl	$6, %eax            # cmpl family and 6
+    /* 
+     * unsigned
+     * ja >
+     * jb <
+     */
 	ja	.Lverify_cpu_clear_xd	# family > 6, ok
 	jb	.Lverify_cpu_check	# family < 6, skip
 
@@ -92,7 +103,8 @@ ENTRY(verify_cpu)
 	jb	.Lverify_cpu_check	# family == 6, model < 0xd, skip
 
 .Lverify_cpu_clear_xd:
-	movl	$MSR_IA32_MISC_ENABLE, %ecx
+    /* Enable Miscellaneous Processor Feature */
+	movl	$MSR_IA32_MISC_ENABLE, %ecx     # family > 6
 	rdmsr
 	btrl	$2, %edx		# clear MSR_IA32_MISC_ENABLE_XD_DISABLE
 	jnc	.Lverify_cpu_check	# only write MSR if bit was changed

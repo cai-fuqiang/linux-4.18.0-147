@@ -57,6 +57,10 @@ ENTRY(startup_32)
 	 * Test KEEP_SEGMENTS flag to see if the bootloader is asking
 	 * us to not reload segments
 	 */
+    /*
+     * 需不需要从新load segment regs 
+     * esi : boot_params
+     */
 	testb $KEEP_SEGMENTS, BP_loadflags(%esi)
 	jnz 1f
 
@@ -75,12 +79,20 @@ ENTRY(startup_32)
  * data at 0x1e4 (defined as a scratch field) are used as the stack
  * for this calculation. Only 4 bytes are needed.
  */
+    /*
+     * 底下的几行能计算出，kernel将startup_32()加载到那个物理地址 
+     */
 	leal	(BP_scratch+4)(%esi), %esp
 	call	1f
 1:	popl	%ebp
 	subl	$1b, %ebp
 
 /* setup a stack and make sure cpu supports long mode. */
+    /*
+     * setup a stack, 这个stack是给verity_cpu使用, 
+     * 底下的两行实际上是记录了boot_stack_end该符号加载到哪个物理
+     * 地址
+     */
 	movl	$boot_stack_end, %eax
 	addl	%ebp, %eax
 	movl	%eax, %esp
@@ -100,7 +112,7 @@ ENTRY(startup_32)
 
 #ifdef CONFIG_RELOCATABLE
 	movl	%ebp, %ebx
-	movl	BP_kernel_alignment(%esi), %eax
+	movl	BP_kernel_alignment(%esi), %eax     # align
 	decl	%eax
 	addl	%eax, %ebx
 	notl	%eax
