@@ -107,6 +107,10 @@ struct paging_config paging_prepare(void *rmode)
 	 *
 	 * That's substitute for boot_cpu_has() in early boot code.
 	 */
+    /*
+     * 如果要去看intel芯片手册，建议下载最新的芯片手册去查看cpuid(7), 
+     * 旧版的手册(2019)没有X86_FEATURE_LA57 
+     */
 	if (IS_ENABLED(CONFIG_X86_5LEVEL) &&
 			!cmdline_find_option_bool("no5lvl") &&
 			native_cpuid_eax(0) >= 7 &&

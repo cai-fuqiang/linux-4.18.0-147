@@ -42,6 +42,10 @@ SECTIONS
 		*(.rodata.*)
 		_erodata = . ;
 	}
+    /*
+     * 22a57f5896df218356bae6203dfaf04bcfd6c88c
+     * x86, setup: Allow global variables and functions in the decompressor
+     */
 	.got : {
 		_got = .;
 		KEEP(*(.got.plt))

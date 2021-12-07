@@ -141,8 +141,8 @@ ENTRY(startup_32)
      * .word 0                          6
      * .quad __KERNEL32_CS              8
      */
-	addl	%ebp, gdt+2(%ebp)
-	lgdt	gdt(%ebp)
+	addl	%ebp, gdt+2(%ebp)           #注意这里使用的是ebp, 实际上是startup_32加载的物理地址
+	lgdt	gdt(%ebp)                   #lgdt加载gdt表
 
 	/* Enable PAE mode */
 	movl	%cr4, %eax
@@ -173,14 +173,25 @@ ENTRY(startup_32)
 
 	/* Build Level 4 */
 	leal	pgtable + 0(%ebx), %edi
+    /*
+     * 参考:
+     * 1. https://www.bookstack.cn/read/linux-insides-zh/Booting-linux-bootstrap-4.md
+     * 2. intel-man : table-4.14
+     * 0x1007 = 4096 + 7 = (%edi)   7: 111b P(present) R/W  U/S
+     * 
+     * 要注意的是PML4 entry(PML4E) bit M-1:12 该字段中存储的是(address / 4096), 实际上也就是
+     * address >> 12，比较好计算的是直接把address + 该entry的其他字段即可, 所以这里是将
+     * (address:pgtable + 1007), 直接add到该entry中.
+     */
 	leal	0x1007 (%edi), %eax
 	movl	%eax, 0(%edi)
+    /* 这个是和加密有关 */
 	addl	%edx, 4(%edi)
 
 	/* Build Level 3 */
-	leal	pgtable + 0x1000(%ebx), %edi
-	leal	0x1007(%edi), %eax
-	movl	$4, %ecx
+	leal	pgtable + 0x1000(%ebx), %edi    #pgtable + 4096
+	leal	0x1007(%edi), %eax              # 1007 
+	movl	$4, %ecx                        # 复制4次
 1:	movl	%eax, 0x00(%edi)
 	addl	%edx, 0x04(%edi)
 	addl	$0x00001000, %eax
@@ -189,19 +200,33 @@ ENTRY(startup_32)
 	jnz	1b
 
 	/* Build Level 2 */
-	leal	pgtable + 0x2000(%ebx), %edi
-	movl	$0x00000183, %eax
-	movl	$2048, %ecx
+    /* at this table(level 2), map 2-MByte Page */
+	leal	pgtable + 0x2000(%ebx), %edi    # pgtable + 4096 + 4096
+    /*
+     * 0x183 : 1 1000 0011b
+     * Present 
+     * R/W  
+     * PS : Page size; must be 1 (otherwise, this entry references a page table; see Table 4-18), 
+     *      这个位是标记该entry指向的是page table，而不是page directory
+     * G :  if CR4.PGE = 1, determines whether the translation is global (see Section 4.10); ignored otherwise
+     */
+	movl	$0x00000183, %eax               # 
+    /*
+     * 循环2048次, 一个PDE, 可以有 4096 / 8, 一共有1个PML4E表项
+     * 4个PDPE表项，所以，一共(4096 / 8 ) * 4个2M的页表，所以这里循环2048,
+     * 所包含的虚拟地址:2M * 2048 = 4G
+     */
+	movl	$2048, %ecx                     
 1:	movl	%eax, 0(%edi)
 	addl	%edx, 4(%edi)
-	addl	$0x00200000, %eax
+	addl	$0x00200000, %eax               # 每一次物理地址+2M
 	addl	$8, %edi
 	decl	%ecx
 	jnz	1b
 
 	/* Enable the boot page tables */
 	leal	pgtable(%ebx), %eax
-	movl	%eax, %cr3
+	movl	%eax, %cr3                      # 在cr3中enable
 
 	/* Enable Long mode in EFER (Extended Feature Enable Register) */
 	movl	$MSR_EFER, %ecx
@@ -211,8 +236,9 @@ ENTRY(startup_32)
 
 	/* After gdt is loaded */
 	xorl	%eax, %eax
-	lldt	%ax
+	lldt	%ax                             # load local descriptor table register
 	movl    $__BOOT_TSS, %eax
+    /* Loads the source operand into the segment selector field of the task register */
 	ltr	%ax
 
 	/*
@@ -234,14 +260,14 @@ ENTRY(startup_32)
 	leal	handover_entry(%ebp), %eax
 1:
 #endif
-	pushl	%eax
+	pushl	%eax            # 将eax(startup_64) push 到堆栈中
 
 	/* Enter paged protected Mode, activating Long Mode */
 	movl	$(X86_CR0_PG | X86_CR0_PE), %eax /* Enable Paging and Protected mode */
-	movl	%eax, %cr0
+	movl	%eax, %cr0      # 开启保护模式和分页模式, long-mode
 
 	/* Jump from 32bit compatibility mode into 64bit mode. */
-	lret
+	lret                    # jmp 到startup_64
 ENDPROC(startup_32)
 
 #ifdef CONFIG_EFI_MIXED
@@ -305,6 +331,13 @@ ENTRY(startup_64)
 
 	/* Start with the delta to where the kernel will run at. */
 #ifdef CONFIG_RELOCATABLE
+    /* 
+     * 在这里rbp还是kernel 应该解压的首地址, 但是这里startup_64不能以考
+     * 在32-bit mode中计算得到的结果因此在这里重新计算一遍
+     * 
+     * https://www.bookstack.cn/read/linux-insides-zh/Booting-linux-bootstrap-5.md
+     * 因为bootloader可以使用64位引导协议，而startup_32在这种情况下不会执行
+     */
 	leaq	startup_32(%rip) /* - $startup_32 */, %rbp
 	movl	BP_kernel_alignment(%rsi), %eax
 	decl	%eax
@@ -341,7 +374,12 @@ ENTRY(startup_64)
 	call	1f
 1:	popq	%rdi
 	subq	$1b, %rdi
+    /* 
+     * 5c9b0b1c49881c680d4a56b9d9e03dfb3160fd4d 
+     * Set up GOT for paging_prepare() and cleanup_trampoline()  
+     */
 
+    /* 解压完之前，全局的变量和符号需要做一个偏移的处理 */
 	call	adjust_got
 
 	/*
@@ -436,13 +474,16 @@ trampoline_return:
 1:	popq	%rax
 	subq	$1b, %rax
 
-	/* The new adjustment is the relocation address */
 	movq	%rbx, %rdi
+	/* The new adjustment is the relocation address */
 	call	adjust_got
 
 /*
  * Copy the compressed kernel to the end of our buffer
  * where decompression in place becomes safe.
+ */
+/*
+ * 将压缩的内核mov到一个安全的位置，这样解压缩可以safe exec
  */
 	pushq	%rsi
 	leaq	(_bss-8)(%rip), %rsi
@@ -565,12 +606,18 @@ relocated:
  * first time we touch GOT).
  * RDI is the new adjustment to apply.
  */
+/*
+ * 这里有两个参数, 
+ * 第一个参数(rax) : previous adjustment, 也就是上一次调整的值，如果
+ * 是第一次调用的话，该值为0
+ * 第二个参数(rdi) : new adjustment
+ */
 adjust_got:
 	/* Walk through the GOT adding the address to the entries */
 	leaq	_got(%rip), %rdx
 	leaq	_egot(%rip), %rcx
 1:
-	cmpq	%rcx, %rdx
+	cmpq	%rcx, %rdx      /* if _egot >= _got */
 	jae	2f
 	subq	%rax, (%rdx)	/* Undo previous adjustment */
 	addq	%rdi, (%rdx)	/* Apply the new adjustment */
