@@ -144,6 +144,17 @@ xfs_trans_dup(
  * This does not do quota reservations. That typically is done by the
  * caller afterwards.
  */
+/*
+ * 这个函数是为给定transaction预留free disk blocks和log space. 这个操作必须
+ * 在该事务分配任何资源之前完成。
+ *
+ * 如果这里没有足够的可获取的blocks，他将会返回ENOSPC。
+ * 它将会sleep wait for available log space
+ * 关于flags param 唯一的合法的值位XFS_RES_LOG_PERM, 它用于long running transaction
+ * 如果他们当中的任何一个预定失败，他们都会回退。
+ *
+ * 他们不会有配额预定。他们通常会在之后被caller完成。
+ */
 static int
 xfs_trans_reserve(
 	struct xfs_trans	*tp,
@@ -168,12 +179,16 @@ xfs_trans_reserve(
 			current_restore_flags_nested(&tp->t_pflags, PF_MEMALLOC_NOFS);
 			return -ENOSPC;
 		}
+        //会加上blocks
 		tp->t_blk_res += blocks;
 	}
 
 	/*
 	 * Reserve the log space needed for this transaction.
 	 */
+    /*
+     * 去预留 log space
+     */
 	if (resp->tr_logres > 0) {
 		bool	permanent = false;
 
@@ -183,7 +198,7 @@ xfs_trans_reserve(
 		       tp->t_log_count == resp->tr_logcount);
 
 		if (resp->tr_logflags & XFS_TRANS_PERM_LOG_RES) {
-			tp->t_flags |= XFS_TRANS_PERM_LOG_RES;
+			tp->t_flags |= XFS_TRANS_PERM_LOG_RES;  //永久的预留
 			permanent = true;
 		} else {
 			ASSERT(tp->t_ticket == NULL);
@@ -264,6 +279,7 @@ xfs_trans_alloc(
 	 * GFP_NOFS allocation context so that we avoid lockdep false positives
 	 * by doing GFP_KERNEL allocations inside sb_start_intwrite().
 	 */
+    /* 先分配一个tp */
 	tp = kmem_zone_zalloc(xfs_trans_zone,
 		(flags & XFS_TRANS_NOFS) ? KM_NOFS : KM_SLEEP);
 
@@ -277,7 +293,8 @@ xfs_trans_alloc(
 	WARN_ON(resp->tr_logres > 0 &&
 		mp->m_super->s_writers.frozen == SB_FREEZE_COMPLETE);
 	atomic_inc(&mp->m_active_trans);
-
+    
+    /* struct xfs_trans_header->th_magic*/
 	tp->t_magic = XFS_TRANS_HEADER_MAGIC;
 	tp->t_flags = flags;
 	tp->t_mountp = mp;

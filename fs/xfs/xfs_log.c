@@ -161,19 +161,23 @@ xlog_grant_add_space(
 
 	do {
 		int		tmp;
+        //这里cycle代表循环了几次
+        //space 代表使用的空间
 		int		cycle, space;
 
 		xlog_crack_grant_head_val(head_val, &cycle, &space);
-
+        //tmp 代表剩余的空间??
 		tmp = log->l_logsize - space;
 		if (tmp > bytes)
 			space += bytes;
 		else {
+            //这样的计算说明是一个ring buffer
 			space = bytes - tmp;
 			cycle++;
 		}
 
 		old = head_val;
+        //生成新的head值
 		new = xlog_assign_grant_head_val(cycle, space);
 		head_val = atomic64_cmpxchg(head, old, new);
 	} while (head_val != old);
@@ -1625,6 +1629,13 @@ xlog_commit_record(
  * the 25% which we want to leave free.  We may need to adopt a policy which
  * pushes on an lsn which is further along in the log once we reach the high
  * water mark.  In this manner, we would be creating a low water mark.
+ */
+/*
+ * 发动buffer cache code (flush -> disk ?) 如果我们使用了超过75%的on-disk log
+ * space.
+ *
+ * 这里表示会采用一个water mark的策略，当达到高水位线时，就会去push on an further
+ * lsn
  */
 STATIC void
 xlog_grant_push_ail(
@@ -3581,6 +3592,7 @@ xfs_log_calc_unit_res(
 	int			unit_bytes)
 {
 	struct xlog		*log = mp->m_log;
+    /* iclog 指的是in-core log */
 	int			iclog_space;
 	uint			num_headers;
 
@@ -3614,12 +3626,18 @@ xfs_log_calc_unit_res(
 	 *   The commit-rec is smaller than padding in this scenario and so it is
 	 *   not added separately.
 	 */
+    /*
+     *
+     */
 
 	/* for trans header */
+    //+ trans op header
 	unit_bytes += sizeof(xlog_op_header_t);
+    //+ trans header
 	unit_bytes += sizeof(xfs_trans_header_t);
 
 	/* for start-rec */
+    //+ start op header
 	unit_bytes += sizeof(xlog_op_header_t);
 
 	/*
@@ -3639,22 +3657,57 @@ xfs_log_calc_unit_res(
 	 * Fundamentally, this means we must pass the entire log vector to
 	 * xlog_write to guarantee this.
 	 */
+    /*
+     * LR header指的可能时 : XLOG_WAS_CONT_TRANS
+     */
 	iclog_space = log->l_iclog_size - log->l_iclog_hsize;
+    /*
+     * 这里指的是限制指的是一个xfs_log_rec data部分最大大小, 不包括
+     * xlog_rec_header, 限制大小为xlog->l_iclog_size - log->l_iclog_hsize(
+     * l_iclog_hsize表示 xlog_rec_header占用的大小, 为512)
+     *
+     * 所以这里data部分包括 xlog_op_header以及其data部分
+     */
 	num_headers = howmany(unit_bytes, iclog_space);
 
 	/* for split-recs - ophdrs added when data split over LRs */
 	unit_bytes += sizeof(xlog_op_header_t) * num_headers;
 
 	/* add extra header reservations if we overrun */
+
+     /*
+      * 如果num header为0 || 加上header在计算一次, 因为加上header后空间又变大了，
+      * 所以需要再次计算，表现在代码里，就是这个while循环，
+      * 最终得到的实际上是准确的值，也就是每个op真的不超过
+      * xlog->l_iclog_size - log->l_iclog_hsize
+      */
 	while (!num_headers ||
 	       howmany(unit_bytes, iclog_space) > num_headers) {
 		unit_bytes += sizeof(xlog_op_header_t);
 		num_headers++;
 	}
+    /*
+     * 然后在加上log->l_iclog_hsize * num_header
+     * 这里加上的实际上是xlog_rec_header所在的block，为
+     * l_iclog_hsize: 512
+     */
 	unit_bytes += log->l_iclog_hsize * num_headers;
 
 	/* for commit-rec LR header - note: padding will subsume the ophdr */
+    /* 
+     * 再加一个commit-rec:
+     * 我的理解：
+     * 上面的情况可能会出现，所有的空间被填满，这个时候commit rec还需要空间，
+     * 为了便于计算，这里直接加上一个xlog_rec_header -- commit rec, 但是这里
+     * 没有加op_header，但是注释中说 !!padding will subsume the ophder ??
+     */
 	unit_bytes += log->l_iclog_hsize;
+    /*           PADDING OP 
+     *              |   |
+     *              \   /
+     *               \ /
+     *                |
+     */
 
 	/* for roundoff padding for transaction data and one for commit record */
 	if (xfs_sb_version_haslogv2(&mp->m_sb) && mp->m_sb.sb_logsunit > 1) {
@@ -3662,8 +3715,9 @@ xfs_log_calc_unit_res(
 		unit_bytes += 2 * mp->m_sb.sb_logsunit;
 	} else {
 		/* BB roundoff */
+        //会在这里加1024
 		unit_bytes += 2 * BBSIZE;
-        }
+    }
 
 	return unit_bytes;
 }

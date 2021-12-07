@@ -1196,6 +1196,11 @@ xfs_create(
 	 * the case we'll drop the one we have and get a more
 	 * appropriate transaction later.
 	 */
+    /*
+     * 最初假定文件不存在但是保留了相关的资源。
+     * 如果在这种情况下没有分配到，则将其drop ，之后再分配
+     */
+    //去分配一个trans
 	error = xfs_trans_alloc(mp, tres, resblks, 0, 0, &tp);
 	if (error == -ENOSPC) {
 		/* flush outstanding delalloc blocks and retry */
@@ -1227,6 +1232,7 @@ xfs_create(
      *
      * 这个参数是设置该inode的节点数
      */
+    //这个应该是向父目录inode 去申请空间
 	error = xfs_dir_ialloc(&tp, dp, mode, is_dir ? 2 : 1, rdev, prid, &ip);
 	if (error)
 		goto out_trans_cancel;
@@ -1276,6 +1282,7 @@ xfs_create(
 	 */
 	xfs_qm_vop_create_dqattach(tp, ip, udqp, gdqp, pdqp);
 
+    //去commit trans
 	error = xfs_trans_commit(tp);
 	if (error)
 		goto out_release_inode;
