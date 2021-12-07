@@ -118,6 +118,7 @@ ENTRY(startup_32)
 	notl	%eax
 	andl	%eax, %ebx
 	cmpl	$LOAD_PHYSICAL_ADDR, %ebx
+    /* jump short if greater or equal (SF = OF) */
 	jge	1f
 #endif
 	movl	$LOAD_PHYSICAL_ADDR, %ebx
@@ -127,12 +128,19 @@ ENTRY(startup_32)
 	movl	BP_init_size(%esi), %eax
 	subl	$_end, %eax
 	addl	%eax, %ebx
-
+    /* 在这里算完了加载的物理地址, 存放到ebx处 */
 /*
  * Prepare for entering 64 bit mode
  */
 
 	/* Load new GDT with the 64bit segments using 32bit descriptor */
+    /*
+     * gdt:                             OFFSET
+     * .word gdt_end - gdt              0
+     * .long gdt                        2(gdt+2)
+     * .word 0                          6
+     * .quad __KERNEL32_CS              8
+     */
 	addl	%ebp, gdt+2(%ebp)
 	lgdt	gdt(%ebp)
 
