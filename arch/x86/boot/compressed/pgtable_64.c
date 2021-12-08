@@ -63,10 +63,12 @@ static unsigned long find_trampoline_placement(void)
 		entry = &boot_params->e820_table[i];
 
 		/* Skip all entries above bios_start. */
+        /* 如果要是 <= continue */
 		if (bios_start <= entry->addr)
 			continue;
 
 		/* Skip non-RAM entries. */
+        /* 如果不是RAM */
 		if (entry->type != E820_TYPE_RAM)
 			continue;
 
@@ -75,9 +77,12 @@ static unsigned long find_trampoline_placement(void)
 			bios_start = entry->addr + entry->size;
 
 		/* Keep bios_start page-aligned. */
+        //PAGE_SIZE对齐
 		bios_start = round_down(bios_start, PAGE_SIZE);
 
 		/* Skip the entry if it's too small. */
+        /* 2 PAGE_SIZE */
+        /*  查看这个entry是否可以满足 */
 		if (bios_start - TRAMPOLINE_32BIT_SIZE < entry->addr)
 			continue;
 
@@ -123,12 +128,15 @@ struct paging_config paging_prepare(void *rmode)
 	trampoline_32bit = (unsigned long *)paging_config.trampoline_start;
 
 	/* Preserve trampoline memory */
+    /* 先将原数据备份 */
 	memcpy(trampoline_save, trampoline_32bit, TRAMPOLINE_32BIT_SIZE);
 
 	/* Clear trampoline memory first */
+    /* 将该buffer cleanup */
 	memset(trampoline_32bit, 0, TRAMPOLINE_32BIT_SIZE);
 
 	/* Copy trampoline code in place */
+    /* 这是个code32 */
 	memcpy(trampoline_32bit + TRAMPOLINE_32BIT_CODE_OFFSET / sizeof(unsigned long),
 			&trampoline_32bit_src, TRAMPOLINE_32BIT_CODE_SIZE);
 
@@ -142,10 +150,22 @@ struct paging_config paging_prepare(void *rmode)
 	 * code wouldn't touch CR3.
 	 */
 
+    /* 
+     * X86_CR4_LA57 bit control 5-level page
+     *
+     * When set in IA-32e mode, the processor uses 5-level paging
+     * to translate 57-bit linear addresses.
+     */
+
 	/*
 	 * We are not going to use the page table in trampoline memory if we
 	 * are already in the desired paging mode.
 	 */
+    /*
+     * 1. 如果需要5-level mode , 并且该位已经置上了，说明CPU已经进入了
+     * 5-level mode，不需要再使用trampoline memory
+     * 2. 如果不需要5-level mode, 恰好CR4该位没有置该位，也不需要再做其他操作
+     */
 	if (paging_config.l5_required == !!(native_read_cr4() & X86_CR4_LA57))
 		goto out;
 
@@ -154,8 +174,10 @@ struct paging_config paging_prepare(void *rmode)
 		 * For 4- to 5-level paging transition, set up current CR3 as
 		 * the first and the only entry in a new top-level page table.
 		 */
+        /* PML5 */
 		trampoline_32bit[TRAMPOLINE_32BIT_PGTABLE_OFFSET] = __native_read_cr3() | _PAGE_TABLE_NOENC;
 	} else {
+        /* 这种情况就是 已经进入了5-level， 但是kenrel没有配置5-level */
 		unsigned long src;
 
 		/*
@@ -166,7 +188,9 @@ struct paging_config paging_prepare(void *rmode)
 		 * We cannot just point to the page table from trampoline as it
 		 * may be above 4G.
 		 */
+        /* 获取PAGE_MASK, PAGE_MASK获取的值，实际上是PML4 table的首地址 */
 		src = *(unsigned long *)__native_read_cr3() & PAGE_MASK;
+        /* copy whole PML4 table */
 		memcpy(trampoline_32bit + TRAMPOLINE_32BIT_PGTABLE_OFFSET / sizeof(unsigned long),
 		       (void *)src, PAGE_SIZE);
 	}
@@ -178,18 +202,24 @@ out:
 void cleanup_trampoline(void *pgtable)
 {
 	void *trampoline_pgtable;
-
+    /* 找到 top pgtable 的首地址 */
 	trampoline_pgtable = trampoline_32bit + TRAMPOLINE_32BIT_PGTABLE_OFFSET / sizeof(unsigned long);
 
 	/*
 	 * Move the top level page table out of trampoline memory,
 	 * if it's there.
 	 */
+    /*
+     * 如果trampoline_pgtable的地址 == cr3中保存的地址, 
+     * 说明cr3已经切换了，那么trampoline_pgtable这个临时的存储
+     * 区域其中的内容需要拷贝到pgtable中
+     */
 	if ((void *)__native_read_cr3() == trampoline_pgtable) {
 		memcpy(pgtable, trampoline_pgtable, PAGE_SIZE);
 		native_write_cr3((unsigned long)pgtable);
 	}
 
 	/* Restore trampoline memory */
+    /* 将trampoline_32bit其中的内存恢复 */
 	memcpy(trampoline_32bit, trampoline_save, TRAMPOLINE_32BIT_SIZE);
 }

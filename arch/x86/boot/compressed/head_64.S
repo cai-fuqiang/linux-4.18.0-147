@@ -406,7 +406,7 @@ ENTRY(startup_64)
 	 * already in a desired paging mode. This way the trampoline code gets
 	 * tested on every boot.
 	 */
-
+    /* 如果是再long mode中清除CR4.LA57会导致 #GP , 所以我们需要关闭long mode和 paging */
 	/* Make sure we have GDT with 32-bit code segment */
 	leaq	gdt(%rip), %rax
 	movq	%rax, gdt64+2(%rip)
@@ -428,7 +428,7 @@ ENTRY(startup_64)
 	popq	%rsi
 
 	/* Save the trampoline address in RCX */
-	movq	%rax, %rcx
+	movq	%rax, %rcx      /* trampoline address */
 
 	/*
 	 * Load the address of trampoline_return() into RDI.
@@ -438,8 +438,10 @@ ENTRY(startup_64)
 
 	/* Switch to compatibility mode (CS.L = 0 CS.D = 1) via far return */
 	pushq	$__KERNEL32_CS
+    /* TRAMPOLINE_32BIT_CODE_OFFSET($ret) load code trampoline_32bit_src */
 	leaq	TRAMPOLINE_32BIT_CODE_OFFSET(%rax), %rax
 	pushq	%rax
+    /* jmp trampoline_32bit_src */
 	lretq
 trampoline_return:
 	/* Restore the stack, the 32-bit trampoline uses its own stack */
@@ -455,6 +457,7 @@ trampoline_return:
 	 * this function call.
 	 */
 	pushq	%rsi
+    /* rdi 保存这top_pgtable的首地址 , rsi在这里要保存下 */
 	leaq	top_pgtable(%rbx), %rdi
 	call	cleanup_trampoline
 	popq	%rsi
@@ -473,7 +476,7 @@ trampoline_return:
 	call	1f
 1:	popq	%rax
 	subq	$1b, %rax
-
+    /* 上一次切换调用的代码时binary的加载 */
 	movq	%rbx, %rdi
 	/* The new adjustment is the relocation address */
 	call	adjust_got
@@ -484,11 +487,14 @@ trampoline_return:
  */
 /*
  * 将压缩的内核mov到一个安全的位置，这样解压缩可以safe exec
+ * bss 存储的是压缩的内核, 这里是把这部分代码，放在了压缩内核
+ * 代码之后, 拷贝了$bss / 8 个bit, 跳转到该地址
  */
 	pushq	%rsi
 	leaq	(_bss-8)(%rip), %rsi
 	leaq	(_bss-8)(%rbx), %rdi
 	movq	$_bss /* - $startup_32 */, %rcx
+    /* bit -> byte(8) */
 	shrq	$3, %rcx
 	std
 	rep	movsq
@@ -574,16 +580,26 @@ relocated:
 /*
  * Clear BSS (stack is currently empty)
  */
+    /* clean bss内容，注: 这里的相对寻址，实际上已经是按照relocated  address运行的 */
 	xorl	%eax, %eax
 	leaq    _bss(%rip), %rdi
 	leaq    _ebss(%rip), %rcx
-	subq	%rdi, %rcx
+	subq	%rdi, %rcx  
 	shrq	$3, %rcx
 	rep	stosq
 
 /*
  * Do the extraction, and jump to the new kernel..
  */
+    /*
+     * 传参顺序: %rdi, %rsi, %ecx, %rdx, %r8, %r9
+     * 1. rdi : boot_params
+     * 2. rsi : boot_heap
+     * 3. rdx : input_data ./piggy.S 压缩内核的编译地址
+     * 4. rcx : input_len
+     * 5. r8  : output target data
+     * 9. r9  : output len
+     */
 	pushq	%rsi			/* Save the real mode argument */
 	movq	%rsi, %rdi		/* real mode address */
 	leaq	boot_heap(%rip), %rsi	/* malloc area for uncompression */
@@ -636,11 +652,20 @@ adjust_got:
  */
 ENTRY(trampoline_32bit_src)
 	/* Set up data and stack segments */
+    /* 重新设置下ds ss segment selector */
 	movl	$__KERNEL_DS, %eax
 	movl	%eax, %ds
 	movl	%eax, %ss
 
 	/* Set up new stack */
+    /* 
+     *  设置新的栈
+     * new stack head     ------------ 0x2000
+     *
+     * trampoline code    ------------ 0x1000
+     *
+     * trampoline pgtable ------------ 0x0
+     */
 	leal	TRAMPOLINE_32BIT_STACK_END(%ecx), %esp
 
 	/* Disable paging */
@@ -649,13 +674,20 @@ ENTRY(trampoline_32bit_src)
 	movl	%eax, %cr0
 
 	/* Check what paging mode we want to be in after the trampoline */
+    /* 
+     * edx表示是否要使用5-level page 
+     * 0 : Not use 5-level page
+     * 1 : use 5-level page
+     */
 	cmpl	$0, %edx
 	jz	1f
 
 	/* We want 5-level paging: don't touch CR3 if it already points to 5-level page tables */
 	movl	%cr4, %eax
 	testl	$X86_CR4_LA57, %eax
+    /* 如果开启LA57 jump 3 */
 	jnz	3f
+    /* 如果没有开启LA57 jump 2 */
 	jmp	2f
 1:
 	/* We want 4-level paging: don't touch CR3 if it already points to 4-level page tables */
@@ -664,18 +696,34 @@ ENTRY(trampoline_32bit_src)
 	jz	3f
 2:
 	/* Point CR3 to the trampoline's new top level page table */
+    /* 如果没有开启LA57 */
+    /* 先赋值cr3 */
 	leal	TRAMPOLINE_32BIT_PGTABLE_OFFSET(%ecx), %eax
 	movl	%eax, %cr3
 3:
 	/* Enable PAE and LA57 (if required) paging modes */
 	movl	$X86_CR4_PAE, %eax
+    /* Not use 5-level */
 	cmpl	$0, %edx
 	jz	1f
+    /* 这种情况是没有开启5-level ,但是想开启5-level */
 	orl	$X86_CR4_LA57, %eax
 1:
 	movl	%eax, %cr4
 
 	/* Calculate address of paging_enabled() once we are executing in the trampoline */
+    /*
+     * -------- trampoline pgtable(%ecx)
+     *              |
+     *          PAGE_SIZE
+     *              |
+     * -------- trampoline code trampoline_32bit_src
+     *              |
+     *              symbol address(paging_enabled - trampoline_32bit_src)
+     *              | 
+     * -------- paging_enabled
+     * --------
+     */
 	leal	paging_enabled - trampoline_32bit_src + TRAMPOLINE_32BIT_CODE_OFFSET(%ecx), %eax
 
 	/* Prepare the stack for far return to Long Mode */
@@ -690,7 +738,9 @@ ENTRY(trampoline_32bit_src)
 
 	.code64
 paging_enabled:
+    /* trampoline_32bit_src() -> paging_enabled */
 	/* Return from the trampoline */
+	/* rdi : trampoline_return */
 	jmp	*%rdi
 
 	/*
@@ -698,6 +748,7 @@ paging_enabled:
          * Make sure we fail to compile if the trampoline code grows
          * beyond TRAMPOLINE_32BIT_CODE_SIZE bytes.
 	 */
+    /* 做一个补全 */
 	.org	trampoline_32bit_src + TRAMPOLINE_32BIT_CODE_SIZE
 
 	.code32
