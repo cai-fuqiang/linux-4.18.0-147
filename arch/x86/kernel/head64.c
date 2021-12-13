@@ -110,6 +110,9 @@ static bool __head check_la57_support(unsigned long physaddr)
  * boot-time crashes. To work around this problem, every global pointer must
  * be adjusted using fixup_pointer().
  */
+/*
+ * physaddr为_text的地址, 实际上是vmlinux .text段的首地址
+ */
 unsigned long __head __startup_64(unsigned long physaddr,
 				  struct boot_params *bp)
 {
@@ -125,9 +128,14 @@ unsigned long __head __startup_64(unsigned long physaddr,
 	int i;
 	unsigned int *next_pgt_ptr;
 
+    //查看la57是否支持
 	la57 = check_la57_support(physaddr);
 
 	/* Is the address too large? */
+    /* 
+     * 查看该地址是否超过最大值，假如说是long mode，并且
+     * 开启了la57, 那么最大值就是52
+     */
 	if (physaddr >> MAX_PHYSMEM_BITS)
 		for (;;);
 
@@ -135,6 +143,9 @@ unsigned long __head __startup_64(unsigned long physaddr,
 	 * Compute the delta between the address I am compiled to run at
 	 * and the address I am actually running at.
 	 */
+    /* 
+     * physaddr是_text加载的物理地址，而_text - __START_KERNEL_map, 是_text相对于整个image的偏移?
+     */
 	load_delta = physaddr - (unsigned long)(_text - __START_KERNEL_map);
 
 	/* Is the address not 2M aligned? */
@@ -148,25 +159,63 @@ unsigned long __head __startup_64(unsigned long physaddr,
 	load_delta += sme_get_me_mask();
 
 	/* Fixup the physical addresses in the page table */
-
+    /* 计算出目前pgd的物理地址 */
 	pgd = fixup_pointer(&early_top_pgt, physaddr);
+    /* 计算出__START_KERNEL_map虚拟地址的pgd_index , 并且找到该表项*/
 	p = pgd + pgd_index(__START_KERNEL_map);
+    /* 根据是否支持la57 确定构建三级页表，还是四级页表 */
 	if (la57)
 		*p = (unsigned long)level4_kernel_pgt;
 	else
 		*p = (unsigned long)level3_kernel_pgt;
+    /* 
+     * 将pgtable中其他的位置上(_PAGE_TABLE_NOENC ), 并且根据上面
+     * 得到的load_delta做一个fixup
+     *
+     * 该top level pgtable中只有一个表项
+     */
 	*p += _PAGE_TABLE_NOENC - __START_KERNEL_map + load_delta;
-
+    
+    /*
+     * 根据arch/x86/kernel/head_64.S, 来看，
+     * leve4_kernel_pgt
+     * leve3_kernel_pgt
+     *
+     * 上面的这些pgtable已经在编译的时候填充好了，物理地址是
+     * 按照$symbol - __START_KERNEL_map, 设置的, 所以，下面的这些
+     * table只需要做一个fixup
+     *
+     * 如果支持5level， 那么4-level pgtable中也只有一个表项
+     *
+     * 一个pgtable中最多有512表项，p4d[511]正好是最后一个
+     *
+     * kernel编译时，默认的虚拟地址是0xffffffff80000000, 所以
+     * 只占用一个表项就可以
+     */
 	if (la57) {
 		p4d = fixup_pointer(&level4_kernel_pgt, physaddr);
 		p4d[511] += load_delta;
 	}
+    
+    /* 
+     * 3-level pgtable中有两个表项 , 原因和上面一样。这个是映射的kernel 
+     * image的内存空间(里面存储的还有其他内容), 大小为(2 * 1024 * 1024 * 1024)
+     *
+     * 所以index计算方式为:
+     *
+     * (2^48-(2*1024*1024*1024)-((2^39)*511))/(2^30) = 510
+     *
+     * 见level3_kernel_pgt注释
+     */
 
 	pud = fixup_pointer(&level3_kernel_pgt, physaddr);
 	pud[510] += load_delta;
 	pud[511] += load_delta;
-
+    /*
+     * fixup level2
+     */
 	pmd = fixup_pointer(level2_fixmap_pgt, physaddr);
+    /* 507, 506 */
 	for (i = FIXMAP_PMD_TOP; i > FIXMAP_PMD_TOP - FIXMAP_PMD_NUM; i--)
 		pmd[i] += load_delta;
 
@@ -178,12 +227,15 @@ unsigned long __head __startup_64(unsigned long physaddr,
 	 */
 
 	next_pgt_ptr = fixup_pointer(&next_early_pgt, physaddr);
+    /* pud */
 	pud = fixup_pointer(early_dynamic_pgts[(*next_pgt_ptr)++], physaddr);
+    /* pmd */
 	pmd = fixup_pointer(early_dynamic_pgts[(*next_pgt_ptr)++], physaddr);
 
 	pgtable_flags = _KERNPG_TABLE_NOENC + sme_get_me_mask();
 
 	if (la57) {
+        /* p4d */
 		p4d = fixup_pointer(early_dynamic_pgts[next_early_pgt++], physaddr);
 
 		i = (physaddr >> PGDIR_SHIFT) % PTRS_PER_PGD;
@@ -221,7 +273,9 @@ unsigned long __head __startup_64(unsigned long physaddr,
 	 * cleanup_highmap() fixes this up along with the mappings
 	 * beyond _end.
 	 */
-
+    /*
+     * fixup level2 pgtable
+     */
 	pmd = fixup_pointer(level2_kernel_pgt, physaddr);
 	for (i = 0; i < PTRS_PER_PMD; i++) {
 		if (pmd[i] & _PAGE_PRESENT)
@@ -232,6 +286,10 @@ unsigned long __head __startup_64(unsigned long physaddr,
 	 * Fixup phys_base - remove the memory encryption mask to obtain
 	 * the true physical address.
 	 */
+    /*
+     * phys_addrs 存放的正好是真实物理地址，和编译期望的物理地址的偏移量
+     * 在arch/x86/kernel/head_64.S--startup_64中会遇到
+     */
 	*fixup_long(&phys_base, physaddr) += load_delta - sme_get_me_mask();
 
 	/* Encrypt the kernel and related (if SME is active) */

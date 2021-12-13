@@ -22,6 +22,7 @@
  */
 #define FIXMAP_PMD_NUM	2
 /* fixmap starts downwards from the 507th entry in level2_fixmap_pgt */
+/* 512 -4 -2 + 1*/
 #define FIXMAP_PMD_TOP	507
 
 #ifndef __ASSEMBLY__

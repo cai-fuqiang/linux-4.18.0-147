@@ -73,6 +73,7 @@ startup_64:
 	 */
 
 	/* Set up the stack for verify_cpu(), similar to initial_stack below */
+    /* 初始化一个堆栈 空出一个pt_regs的大小，用于存放pt_regs*/
 	leaq	(__end_init_task - SIZEOF_PTREGS)(%rip), %rsp
 
 	/* Sanitize CPU configuration */
@@ -134,7 +135,12 @@ ENTRY(secondary_startup_64)
 	movq	%rcx, %cr4
 
 	/* Setup early boot stage 4-/5-level pagetables. */
+    /* 
+     * phys_base 存储的是运行物理地址和编译期望的物理地址的偏移,
+     * rax add该值，实际上是early_top_pgt的运行的物理地址
+     */
 	addq	phys_base(%rip), %rax
+    /* 切换CR3 */
 	movq	%rax, %cr3
 
 	/* Ensure I am executing from virtual addresses */
@@ -145,6 +151,7 @@ ENTRY(secondary_startup_64)
 	UNWIND_HINT_EMPTY
 
 	/* Check if nx is implemented */
+    /* intel-man: table 3-8 */
 	movl	$0x80000001, %eax
 	cpuid
 	movl	%edx,%edi
@@ -152,9 +159,18 @@ ENTRY(secondary_startup_64)
 	/* Setup EFER (Extended Feature Enable Register) */
 	movl	$MSR_EFER, %ecx
 	rdmsr
+    /* 
+     * 是否支持System Call :
+     *
+     * SYSCALL Enable: IA32_EFER.SCE (R/W)
+     * Enables SYSCALL/SYSRET instructions in
+     * 64-bit mode.
+     */
 	btsl	$_EFER_SCE, %eax	/* Enable System Call */
+    /* Execute Disable Bit available */
 	btl	$20,%edi		/* No Execute supported? */
 	jnc     1f
+    /* execute bit enable */
 	btsl	$_EFER_NX, %eax
 	btsq	$_PAGE_BIT_NX,early_pmd_flags(%rip)
 1:	wrmsr				/* Make changes effective */
@@ -165,6 +181,7 @@ ENTRY(secondary_startup_64)
 	movq	%rax, %cr0
 
 	/* Setup a boot time stack */
+    /* init task stack */
 	movq initial_stack(%rip), %rsp
 
 	/* zero EFLAGS after setting rsp */
@@ -237,6 +254,8 @@ ENTRY(secondary_startup_64)
 	 */
 	pushq	$.Lafter_lret	# put return address on stack for unwinder
 	xorq	%rbp, %rbp	# clear frame pointer
+    /* 这里rip指向的地址实际上是initial_code的虚拟地址 */
+    /* initial_code : 	x86_64_start_kernel */
 	movq	initial_code(%rip), %rax
 	pushq	$__KERNEL_CS	# set correct cs
 	pushq	%rax		# target address in negative space
@@ -369,6 +388,11 @@ GLOBAL(name)
 #endif
 
 /* Automate the creation of 1 to 1 mapping pmd entries */
+/* 
+ * .rept count : 
+ * Repeat the sequence of lines between the .rept directive 
+ * and the next .endr directive count times.
+ */
 #define PMDS(START, PERM, COUNT)			\
 	i = 0 ;						\
 	.rept (COUNT) ;					\
@@ -442,9 +466,20 @@ NEXT_PAGE(level2_kernel_pgt)
 	 *  runtime.  Care must be taken to clear out undesired bits
 	 *  later, like _PAGE_RW or _PAGE_GLOBAL in some cases.
 	 */
+    /*
+     * 实际上PMD指向的是PAGE, 实际上该页是大页，2M
+     * 
+     * 下面链接有x86 kernel内存映射区间图，可以看出从
+     * https://blog.csdn.net/younger_china/article/details/16829687
+     * 0xffffffff80000000地址开始, 往上512M为kernel code+data+bss
+     * 的映射区, +512M为kernel module映射区
+     */
 	PMDS(0, __PAGE_KERNEL_LARGE_EXEC,
 		KERNEL_IMAGE_SIZE/PMD_SIZE)
 
+    /*
+     * fixmap 区域映射，还会指向1-level pgtable
+     */
 NEXT_PAGE(level2_fixmap_pgt)
 	.fill	(512 - 4 - FIXMAP_PMD_NUM),8,0
 	pgtno = 0
