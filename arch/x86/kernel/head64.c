@@ -233,7 +233,7 @@ unsigned long __head __startup_64(unsigned long physaddr,
 	pmd = fixup_pointer(early_dynamic_pgts[(*next_pgt_ptr)++], physaddr);
 
 	pgtable_flags = _KERNPG_TABLE_NOENC + sme_get_me_mask();
-
+    //ldentity table
 	if (la57) {
         /* p4d */
 		p4d = fixup_pointer(early_dynamic_pgts[next_early_pgt++], physaddr);
