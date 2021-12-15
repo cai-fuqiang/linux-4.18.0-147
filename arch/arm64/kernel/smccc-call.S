@@ -18,7 +18,9 @@
 	.macro SMCCC instr
 	.cfi_startproc
 	\instr	#0
+    /* sp 实际上是struct arm_smccc_res */
 	ldr	x4, [sp]
+    /* 存储x0, x1, x2, x3 ->struct arm_smccc_res */
 	stp	x0, x1, [x4, #ARM_SMCCC_RES_X0_OFFS]
 	stp	x2, x3, [x4, #ARM_SMCCC_RES_X2_OFFS]
 	ldr	x4, [sp, #8]
