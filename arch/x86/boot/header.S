@@ -35,18 +35,25 @@ SYSSEG		= 0x1000		/* historical load address >> 4 */
 #ifndef ROOT_RDONLY
 #define ROOT_RDONLY 1
 #endif
-
+/* 
+ * PE文件格式:
+ * https://docs.microsoft.com/en-us/windows/win32/debug/pe-format
+ */
 	.code16
 	.section ".bstext", "ax"
 
 	.global bootsect_start
 bootsect_start:
+    /* MS-DOS head */
 #ifdef CONFIG_EFI_STUB
 	# "MZ", MS-DOS header
 	.byte 0x4d
 	.byte 0x5a
 #endif
-
+    /* 
+     * MS-DOS stub ，常常用来打印错误信息，表明该文件不能
+     * 运行在MS-DOS
+     */
 	# Normalize the start address
 	ljmp	$BOOTSEG, $start2
 
@@ -81,9 +88,16 @@ bs_die:
 	ljmp	$0xf000,$0xfff0
 
 #ifdef CONFIG_EFI_STUB
+    /*
+     * 0x3c这个地方是固定的，这个地方存放的是PE_HEADER
+     * After the MS-DOS stub, at the file offset specified 
+     * at offset 0x3c, is a 4-byte signature that identifies 
+     * the file as a PE format image file. This signature is 
+     * "PE\0\0" (the letters "P" and "E" followed by two null bytes).
+     */
 	.org	0x3c
 	#
-	# Offset to the PE header.
+	# Offset to the PE header的地址
 	#
 	.long	pe_header
 #endif /* CONFIG_EFI_STUB */
@@ -98,19 +112,36 @@ bugger_off_msg:
 #ifdef CONFIG_EFI_STUB
 pe_header:
 	.ascii	"PE"
-	.word 	0
+	.word 	0       /* two null bytes */
 
 coff_header:
+    /*
+     * The number that identifies the type of target 
+     * machine. For more information, see Machine Types.
+     */
 #ifdef CONFIG_X86_32
 	.word	0x14c				# i386
 #else
 	.word	0x8664				# x86-64
 #endif
+    /*
+     * The number of sections. This indicates the size 
+     * of the section table, which immediately follows 
+     * the headers.
+     */
 	.word	4				# nr_sections
 	.long	0 				# TimeDateStamp
+    /* 这个字段被弃用了 */
 	.long	0				# PointerToSymbolTable
+    /* 这个地方为什么是1 */
 	.long	1				# NumberOfSymbols
 	.word	section_table - optional_header	# SizeOfOptionalHeader
+    /*
+     * Characteristics
+     * The flags that indicate the attributes 
+     * of the file. For specific flag values, 
+     * see Characteristics.
+     */
 #ifdef CONFIG_X86_32
 	.word	0x306				# Characteristics.
 						# IMAGE_FILE_32BIT_MACHINE |
@@ -119,6 +150,19 @@ coff_header:
 						# IMAGE_FILE_LINE_NUMS_STRIPPED
 #else
 	.word	0x206				# Characteristics
+    /*
+     * IMAGE_FILE_DEBUG_STRIPPED 0x0200
+     * Debugging information is removed from the image file.
+     * 
+     * IMAGE_FILE_EXECUTABLE_IMAGE
+     * Image only. This indicates that the image file is valid 
+     * and can be run. If this flag is not set, it indicates a 
+     * linker error.
+     *
+     * IMAGE_FILE_LINE_NUMS_STRIPPED
+     * COFF line numbers have been removed. 
+     * This flag is deprecated and should be zero.
+     */
 						# IMAGE_FILE_DEBUG_STRIPPED |
 						# IMAGE_FILE_EXECUTABLE_IMAGE |
 						# IMAGE_FILE_LINE_NUMS_STRIPPED
@@ -134,16 +178,30 @@ optional_header:
 	.byte	0x14				# MinorLinkerVersion
 
 	# Filled in by build.c
+    /* 这个地方会在build.c编译的工具里面填充 */
 	.long	0				# SizeOfCode
 
+    /* data section ? */
 	.long	0				# SizeOfInitializedData
+    /* BSS section ? */
 	.long	0				# SizeOfUninitializedData
 
 	# Filled in by build.c
+    /*
+     * For program images, this is the starting address. 
+     * For device drivers, this is the address of the 
+     * initialization function. 
+     */
 	.long	0x0000				# AddressOfEntryPoint
 
+    /* 
+     * The address that is relative to the image base 
+     * of the beginning-of-code section when it is 
+     * loaded into memory. 
+     */
 	.long	0x0200				# BaseOfCode
 #ifdef CONFIG_X86_32
+    /* 这个字段只有在PE32, 在PE32+里面没有 */
 	.long	0				# data
 #endif
 
@@ -170,6 +228,7 @@ extra_header_fields:
 
 	.long	0x200				# SizeOfHeaders
 	.long	0				# CheckSum
+    /* An Extensible Firmware Interface (EFI) application */
 	.word	0xa				# Subsystem (EFI application)
 	.word	0				# DllCharacteristics
 #ifdef CONFIG_X86_32
@@ -184,6 +243,11 @@ extra_header_fields:
 	.quad	0				# SizeOfHeapCommit
 #endif
 	.long	0				# LoaderFlags
+    /*
+     * The number of data-directory entries in the 
+     * remainder of the optional header. Each describes 
+     * a location and size.
+     */
 	.long	0x6				# NumberOfRvaAndSizes
 
 	.quad	0				# ExportTable
