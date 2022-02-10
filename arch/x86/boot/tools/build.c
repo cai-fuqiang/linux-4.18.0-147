@@ -190,13 +190,19 @@ static void update_pecoff_setup_and_reloc(unsigned int size)
 	u32 setup_offset = 0x200;
 	u32 reloc_offset = size - PECOFF_RELOC_RESERVE;
 	u32 setup_size = reloc_offset - setup_offset;
-
+	/*
+	 * 这个地方是往.setup 段表中写入setup_offset 和size
+	 * setup offset为0x200, 大小为sizeof(setup.bin - setup_offset)
+	 */
 	update_pecoff_section_header(".setup", setup_offset, setup_size);
 	update_pecoff_section_header(".reloc", reloc_offset, PECOFF_RELOC_RESERVE);
 
 	/*
 	 * Modify .reloc section contents with a single entry. The
 	 * relocation is applied to offset 10 of the relocation section.
+	 */
+	/*
+	 * reloc段的东西没有太看懂
 	 */
 	put_unaligned_le32(reloc_offset + 10, &buf[reloc_offset]);
 	put_unaligned_le32(10, &buf[reloc_offset + 4]);
@@ -249,6 +255,7 @@ static int reserve_pecoff_reloc_section(int c)
 static void efi_stub_defaults(void)
 {
 	/* Defaults for old kernel */
+	//做了一个default的操作，主要是efi_pe_entry address
 #ifdef CONFIG_X86_32
 	efi_pe_entry = 0x10;
 #else
@@ -344,6 +351,9 @@ int main(int argc, char ** argv)
 
 	if (argc != 5)
 		usage();
+	/*
+	 * 去解析某些符号的offset
+	 */
 	parse_zoffset(argv[3]);
 
 	dest = fopen(argv[4], "w");
