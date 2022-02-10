@@ -554,10 +554,12 @@ void __unwind_start(struct unwind_state *state, struct task_struct *task,
 	 * CPU.  This check is racy, but that's ok: the unwinder has other
 	 * checks to prevent it from going off the rails.
 	 */
+    //如果task在其他的cpu上运行(必须是运行状态)
 	if (task_on_another_cpu(task))
 		goto done;
 
 	if (regs) {
+        //have regs
 		if (user_mode(regs))
 			goto done;
 

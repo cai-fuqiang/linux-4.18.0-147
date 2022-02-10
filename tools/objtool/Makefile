@@ -9,7 +9,7 @@ endif
 # always use the host compiler
 HOSTCC	?= gcc
 HOSTLD	?= ld
-CC	 = $(HOSTCC)
+CC	 = $(HOSTCC) -g
 LD	 = $(HOSTLD)
 AR	 = ar
 

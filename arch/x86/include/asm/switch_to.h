@@ -39,6 +39,7 @@ asmlinkage void ret_from_fork(void);
  * This is the structure pointed to by thread.sp for an inactive task.  The
  * order of the fields must match the code in __switch_to_asm().
  */
+//x86 详细见 __switch_to_asm
 struct inactive_task_frame {
 	unsigned long flags;
 #ifdef CONFIG_X86_64
