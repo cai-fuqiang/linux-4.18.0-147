@@ -285,8 +285,11 @@ static void init_translation_status(struct amd_iommu *iommu)
 {
 	u64 ctrl;
 
+    //MMIO Offset 0018h IOMMU Control Register
 	ctrl = readq(iommu->mmio_base + MMIO_CONTROL_OFFSET);
+    //IOMMU enable. RW. Reset 0b
 	if (ctrl & (1<<CONTROL_IOMMU_EN))
+        //如果enable了，置一个已经enabled位
 		iommu->flags |= AMD_IOMMU_FLAG_TRANS_PRE_ENABLED;
 }
 
@@ -857,7 +860,7 @@ static void set_dev_entry_bit(u16 devid, u8 bit)
 {
 	int i = (bit >> 6) & 0x03;
 	int _bit = bit & 0x3f;
-
+    //device table iv 标记位: interrupt map valid
 	amd_iommu_dev_table[devid].data[i] |= (1UL << _bit);
 }
 
@@ -1160,7 +1163,7 @@ static int __init init_iommu_from_acpi(struct amd_iommu *iommu,
 	u32 ivhd_size;
 	int ret;
 
-
+    //这个没看懂, 需要再看下 !!!!
 	ret = add_early_maps();
 	if (ret)
 		return ret;
@@ -1566,15 +1569,22 @@ static int __init init_iommu_one(struct amd_iommu *iommu, struct ivhd_header *h)
 	iommu->int_enabled = false;
 
 	init_translation_status(iommu);
+    //如果已经enable了，又不是在kdump kernel中
 	if (translation_pre_enabled(iommu) && !is_kdump_kernel()) {
+        //disable iommu
 		iommu_disable(iommu);
 		clear_translation_pre_enabled(iommu);
+        //报一个warnning
 		pr_warn("Translation was enabled for IOMMU:%d but we are not in kdump mode\n",
 			iommu->index);
 	}
+    //这种情况下如果走进这个分支，并赋值，
+    //说明，该kernel 是一个kdump kernel, 并且crash
+    //kernel 已经 enable iommu
 	if (amd_iommu_pre_enabled)
 		amd_iommu_pre_enabled = translation_pre_enabled(iommu);
 
+    //
 	ret = init_iommu_from_acpi(iommu, h);
 	if (ret)
 		return ret;
@@ -1585,7 +1595,7 @@ static int __init init_iommu_one(struct amd_iommu *iommu, struct ivhd_header *h)
 
 	/*
 	 * Make sure IOMMU is not considered to translate itself. The IVRS
-	 * table tells us so, but this is a lie!
+	 * table tells us so, buo this is a lie!
 	 */
 	amd_iommu_rlookup_table[iommu->devid] = NULL;
 
@@ -2691,7 +2701,7 @@ static bool detect_ivrs(void)
 {
 	struct acpi_table_header *ivrs_base;
 	acpi_status status;
-
+    //从acpi table中获取到IVRS
 	status = acpi_get_table("IVRS", 0, &ivrs_base);
 	if (status == AE_NOT_FOUND)
 		return false;
@@ -2720,12 +2730,13 @@ static int __init state_next(void)
 	int ret = 0;
 
 	switch (init_state) {
+    //最一开始定义为IOMMU_START_STATE
 	case IOMMU_START_STATE:
 		if (!detect_ivrs()) {
 			init_state	= IOMMU_NOT_FOUND;
 			ret		= -ENODEV;
 		} else {
-			init_state	= IOMMU_IVRS_DETECTED;
+			init_state	= IOMMU_IVRS_DETECTED;      //相当于从acpi table中找到了iommu
 		}
 		break;
 	case IOMMU_IVRS_DETECTED:

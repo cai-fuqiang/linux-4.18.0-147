@@ -258,17 +258,49 @@ extra_header_fields:
 	.quad	0				# BaseRelocationTable
 
 	# Section table
+    /*
+     * 这个表紧挨着optional table, 这个是必须的，因为在file header中，没有成员去
+     * 指向它
+     */
 section_table:
 	#
 	# The offset & size fields are filled in by build.c.
 	#
+    /* (1) name 占用8个字节
+     * eg : sizeof(".setup") + sizeof(byte) * 2 = 8 
+     */
 	.ascii	".setup"
 	.byte	0
 	.byte	0
+    /*
+     * virtual size
+     *
+     * The total size of the section when loaded into memory. 
+     * If this value is greater than SizeOfRawData, the section 
+     * is zero-padded. 
+     */
 	.long	0
+    /*
+     * VirtualAddress
+     * For executable images, the address of the first byte of 
+     * the section relative to the image base when the section is 
+     * loaded into memory. 
+     */
 	.long	0x0				# startup_{32,64}
+    /*
+     * SizeOfRawData
+     *
+     * The size of the section (for object files) or the size of 
+     * the initialized data on disk (for image files). 
+     *
+     * For executable images, this must be a multiple of 
+     * FileAlignment from the optional header
+     */
 	.long	0				# Size of initialized data
 						# on disk
+    /*
+     * The file pointer to the first page of the section within the COFF file. 
+     */
 	.long	0x0				# startup_{32,64}
 	.long	0				# PointerToRelocations
 	.long	0				# PointerToLineNumbers

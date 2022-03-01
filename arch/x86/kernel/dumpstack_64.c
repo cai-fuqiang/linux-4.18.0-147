@@ -111,7 +111,7 @@ int get_stack_info(unsigned long *stack, struct task_struct *task,
 		goto unknown;
 
 	task = task ? : current;
-
+    //这个表示是在task的堆栈中
 	if (in_task_stack(stack, task, info))
 		goto recursion_check;
 

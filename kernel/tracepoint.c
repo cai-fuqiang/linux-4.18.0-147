@@ -280,6 +280,7 @@ int tracepoint_probe_register_prio(struct tracepoint *tp, void *probe,
 	tp_func.data = data;
 	tp_func.prio = prio;
 	ret = tracepoint_add_func(tp, &tp_func, prio);
+
 	mutex_unlock(&tracepoints_mutex);
 	return ret;
 }
