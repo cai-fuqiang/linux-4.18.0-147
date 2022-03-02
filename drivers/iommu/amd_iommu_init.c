@@ -382,9 +382,9 @@ static void iommu_set_device_table(struct amd_iommu *iommu)
 	u64 entry;
 
 	BUG_ON(iommu->mmio_base == NULL);
-
+    //设置device table
 	entry = iommu_virt_to_phys(amd_iommu_dev_table);
-	entry |= (dev_table_size >> 12) - 1;
+	entry |= (dev_table_size >> 12) - 1;        //见3.4.1 control and status register
 	memcpy_toio(iommu->mmio_base + MMIO_DEV_TABLE_OFFSET,
 			&entry, sizeof(entry));
 }
@@ -706,6 +706,7 @@ static void __init free_event_buffer(struct amd_iommu *iommu)
 /* allocates the memory where the IOMMU will log its events to */
 static int __init alloc_ppr_log(struct amd_iommu *iommu)
 {
+    //Peripheral page request report
 	iommu->ppr_log = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
 						  get_order(PPR_LOG_SIZE));
 
@@ -1752,7 +1753,8 @@ static int iommu_init_pci(struct amd_iommu *iommu)
 			      &range);
 	pci_read_config_dword(iommu->dev, cap_ptr + MMIO_MISC_OFFSET,
 			      &misc);
-
+    
+    //暂时认为该功能支持后，IOMMU 支持 IOTLB， 如果不支持IOTLB的话，该IOMMU不支持ATS
 	if (!(iommu->cap & (1 << IOMMU_CAP_IOTLB)))
 		amd_iommu_iotlb_sup = false;
 
@@ -1762,6 +1764,14 @@ static int iommu_init_pci(struct amd_iommu *iommu)
 
 	iommu->features = ((u64)high << 32) | low;
 
+    /*
+     * GTSup : Guest translations support
+     * 
+     * ps : 这个支持可以分为两种:
+     * nested (host) address translation
+     *
+     * guest address translation(optional)
+     */
 	if (iommu_feature(iommu, FEATURE_GT)) {
 		int glxval;
 		u32 max_pasid;
@@ -1781,12 +1791,13 @@ static int iommu_init_pci(struct amd_iommu *iommu)
 		if (amd_iommu_max_glx_val == -1)
 			amd_iommu_max_glx_val = glxval;
 		else
+            //海光is 1, two level
 			amd_iommu_max_glx_val = min(amd_iommu_max_glx_val, glxval);
 	}
 
 	if (iommu_feature(iommu, FEATURE_GT) &&
 	    iommu_feature(iommu, FEATURE_PPR)) {
-		iommu->is_iommu_v2   = true;
+		iommu->is_iommu_v2   = true;        //v2 is true ?
 		amd_iommu_v2_present = true;
 	}
 
@@ -2739,7 +2750,7 @@ static int __init state_next(void)
 			init_state	= IOMMU_IVRS_DETECTED;      //相当于从acpi table中找到了iommu
 		}
 		break;
-	case IOMMU_IVRS_DETECTED:
+	case IOMMU_IVRS_DETECTED:       //detected
 		ret = early_amd_iommu_init();
 		init_state = ret ? IOMMU_INIT_ERROR : IOMMU_ACPI_FINISHED;
 		if (init_state == IOMMU_ACPI_FINISHED && amd_iommu_disabled) {
