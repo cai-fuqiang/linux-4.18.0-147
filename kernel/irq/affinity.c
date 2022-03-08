@@ -111,6 +111,7 @@ static int __irq_build_affinity_masks(const struct irq_affinity *affd,
 	if (!cpumask_weight(cpu_mask))
 		return 0;
 
+    //获取有多少个node
 	nodes = get_nodes_in_cpumask(node_to_cpumask, cpu_mask, &nodemsk);
 
 	/*
@@ -126,30 +127,38 @@ static int __irq_build_affinity_masks(const struct irq_affinity *affd,
 		}
 		return numvecs;
 	}
-
+    //遍历每个node
 	for_each_node_mask(n, nodemsk) {
 		unsigned int ncpus, v, vecs_to_assign, vecs_per_node;
 
 		/* Spread the vectors per node */
+        //每个node有多少个vector
 		vecs_per_node = (numvecs - (curvec - firstvec)) / nodes;
 
 		/* Get the cpus on this node which are in the mask */
+        //cpumask是cpu_present_mask 
+        //nmsk = 在该node上present状态的cpu
 		cpumask_and(nmsk, cpu_mask, node_to_cpumask[n]);
 
 		/* Calculate the number of cpus per vector */
 		ncpus = cpumask_weight(nmsk);
+        //该node 和 vecs_per_node 取最小值
 		vecs_to_assign = min(vecs_per_node, ncpus);
 
 		/* Account for rounding errors */
+        //当ncpu大时，不超过2倍：extra_vecs = ncpu - vecs_to_assign 相当于是差值 
+        //            两倍多时: extra_vecs = ncpu - vecs_to_assign * 2 相当于两倍多的差值
+        //当ncpu 小时， extra_vecs = 0
 		extra_vecs = ncpus - vecs_to_assign * (ncpus / vecs_to_assign);
 
 		for (v = 0; curvec < last_affv && v < vecs_to_assign;
 		     curvec++, v++) {
+            //当ncpu大时，除的值为每个cpu应该分配的中断
 			cpus_per_vec = ncpus / vecs_to_assign;
 
 			/* Account for extra vectors to compensate rounding errors */
 			if (extra_vecs) {
-				cpus_per_vec++;
+				cpus_per_vec++;     //在这里+1
 				--extra_vecs;
 			}
 			irq_spread_init_one(&masks[curvec].mask, nmsk,
@@ -186,7 +195,7 @@ static int irq_build_affinity_masks(const struct irq_affinity *affd,
 
 	if (!zalloc_cpumask_var(&npresmsk, GFP_KERNEL))
 		goto fail_nmsk;
-
+    //获取每个node上有多少cpu
 	node_to_cpumask = alloc_node_to_cpumask();
 	if (!node_to_cpumask)
 		goto fail_npresmsk;
@@ -197,6 +206,7 @@ static int irq_build_affinity_masks(const struct irq_affinity *affd,
 	build_node_to_cpumask(node_to_cpumask);
 
 	/* Spread on present CPUs starting from affd->pre_vectors */
+    //先分配到present 的cpu
 	nr_present = __irq_build_affinity_masks(affd, curvec, numvecs,
 						firstvec, node_to_cpumask,
 						cpu_present_mask, nmsk, masks);
@@ -211,6 +221,7 @@ static int irq_build_affinity_masks(const struct irq_affinity *affd,
 		curvec = firstvec;
 	else
 		curvec = firstvec + nr_present;
+    //在分配到possible的cpu上
 	cpumask_andnot(npresmsk, cpu_possible_mask, cpu_present_mask);
 	nr_others = __irq_build_affinity_masks(affd, curvec, numvecs,
 					       firstvec, node_to_cpumask,
