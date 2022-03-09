@@ -148,6 +148,7 @@ static int msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
 		return -EEXIST;
 
 	if (domain->parent) {
+        //x86_vector_alloc_irq
 		ret = irq_domain_alloc_irqs_parent(domain, virq, nr_irqs, arg);
 		if (ret < 0)
 			return ret;
@@ -407,12 +408,15 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 	msi_alloc_info_t arg;
 	int i, ret, virq;
 	bool can_reserve;
-
+    //这里主要是赋值arg
 	ret = msi_domain_prepare_irqs(domain, dev, nvec, &arg);
 	if (ret)
 		return ret;
-
+    //nvme domain       :       pci_msi_domain_info
+    //nvme domain ops   :       pci_msi_domain_ops
 	for_each_msi_entry(desc, dev) {
+        //nvme set_desc :       pci_msi_set_desc
+        //实际上是计算 arg->msi_hwirq
 		ops->set_desc(&arg, desc);
 
 		virq = __irq_domain_alloc_irqs(domain, -1, desc->nvec_used,

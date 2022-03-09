@@ -350,10 +350,12 @@ unsigned int irq_calc_affinity_vectors(unsigned int minvec, unsigned int maxvec,
 
 	if (resv > minvec)
 		return 0;
-
+    //set_vecs 可以理解成出去pre post vectors剩余应该设置的vector number
 	if (affd->calc_sets) {
+        //有calc_sets，使用maxvec - pre - post
 		set_vecs = maxvec - resv;
 	} else {
+        //没有的话，使用get_online_cpus获取所有online cpu的个数
 		get_online_cpus();
 		set_vecs = cpumask_weight(cpu_possible_mask);
 		put_online_cpus();

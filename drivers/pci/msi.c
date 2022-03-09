@@ -676,6 +676,7 @@ static int msix_setup_entries(struct pci_dev *dev, void __iomem *base,
 	int ret, i;
 
 	if (affd)
+        //构造亲和性
 		masks = irq_create_affinity_masks(nvec, affd);
 
 	for (i = 0, curmsk = masks; i < nvec; i++) {
@@ -744,10 +745,13 @@ static int msix_capability_init(struct pci_dev *dev, struct msix_entry *entries,
 	void __iomem *base;
 
 	/* Ensure MSI-X is disabled while it is set up */
+    //取消使能MSI-X
 	pci_msix_clear_and_set_ctrl(dev, PCI_MSIX_FLAGS_ENABLE, 0);
 
+    //获取flags == Message Control
 	pci_read_config_word(dev, dev->msix_cap + PCI_MSIX_FLAGS, &control);
 	/* Request & Map MSI-X table region */
+    // Map this region, size = control.table_size
 	base = msix_map_region(dev, msix_table_size(control));
 	if (!base)
 		return -ENOMEM;
@@ -940,13 +944,14 @@ static int __pci_enable_msix(struct pci_dev *dev, struct msix_entry *entries,
 
 	if (!pci_msi_supported(dev, nvec))
 		return -EINVAL;
-
+    //返回的table_size
 	nr_entries = pci_msix_vec_count(dev);
 	if (nr_entries < 0)
 		return nr_entries;
+    //需要设置的nvec不能超过nr_entries
 	if (nvec > nr_entries)
 		return nr_entries;
-
+    //nvme驱动并没有传递下来entries
 	if (entries) {
 		/* Check for any invalid entries */
 		for (i = 0; i < nvec; i++) {
@@ -1093,6 +1098,7 @@ static int __pci_enable_msix_range(struct pci_dev *dev,
 	for (;;) {
 		if (affd) {
 			nvec = irq_calc_affinity_vectors(minvec, nvec, affd);
+            //如果小于最小值，返回ENOSPC
 			if (nvec < minvec)
 				return -ENOSPC;
 		}

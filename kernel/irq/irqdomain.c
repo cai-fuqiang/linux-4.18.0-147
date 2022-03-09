@@ -136,7 +136,8 @@ struct irq_domain *__irq_domain_add(struct fwnode_handle *fwnode, int size,
 	struct irq_domain *domain;
 
 	static atomic_t unknown_domains;
-
+    
+    //alloc a irq_domain
 	domain = kzalloc_node(sizeof(*domain) + (sizeof(unsigned int) * size),
 			      GFP_KERNEL, of_node_to_nid(of_node));
 	if (WARN_ON(!domain))
@@ -222,6 +223,7 @@ struct irq_domain *__irq_domain_add(struct fwnode_handle *fwnode, int size,
 
 	mutex_lock(&irq_domain_mutex);
 	debugfs_add_domain_dir(domain);
+    //加入到irq_domain_list上
 	list_add(&domain->link, &irq_domain_list);
 	mutex_unlock(&irq_domain_mutex);
 
@@ -1069,7 +1071,7 @@ static struct irq_data *irq_domain_insert_irq_data(struct irq_domain *domain,
 						   struct irq_data *child)
 {
 	struct irq_data *irq_data;
-
+    
 	irq_data = kzalloc_node(sizeof(*irq_data), GFP_KERNEL,
 				irq_data_get_node(child));
 	if (irq_data) {
@@ -1113,6 +1115,8 @@ static int irq_domain_alloc_irq_data(struct irq_domain *domain,
 		irq_data = irq_get_irq_data(virq + i);
 		irq_data->domain = domain;
 
+        //在每个domain，都申请一个irq_data
+        //其中irq 都等于virq + i
 		for (parent = domain->parent; parent; parent = parent->parent) {
 			irq_data = irq_domain_insert_irq_data(parent, irq_data);
 			if (!irq_data) {
@@ -1299,6 +1303,8 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 	if (realloc && irq_base >= 0) {
 		virq = irq_base;
 	} else {
+        //alloc irq_desc, 而不是msi_desc
+        //这个virq是对于软件层说的，也就是/proc/interrupts 第一列
 		virq = irq_domain_alloc_descs(irq_base, nr_irqs, 0, node,
 					      affinity);
 		if (virq < 0) {
@@ -1307,7 +1313,7 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 			return virq;
 		}
 	}
-
+    //在每个父domain中都申请一个irq_data
 	if (irq_domain_alloc_irq_data(domain, virq, nr_irqs)) {
 		pr_debug("cannot allocate memory for IRQ%d\n", virq);
 		ret = -ENOMEM;
@@ -1315,6 +1321,7 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 	}
 
 	mutex_lock(&irq_domain_mutex);
+    //nvme : msi_domain_ops->alloc : msi_domain_alloc
 	ret = irq_domain_alloc_irqs_hierarchy(domain, virq, nr_irqs, arg);
 	if (ret < 0) {
 		mutex_unlock(&irq_domain_mutex);

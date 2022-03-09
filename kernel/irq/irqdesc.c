@@ -109,7 +109,8 @@ static void desc_set_defaults(unsigned int irq, struct irq_desc *desc, int node,
 	desc->irq_common_data.msi_desc = NULL;
 
 	desc->irq_data.common = &desc->irq_common_data;
-	desc->irq_data.irq = irq;
+    //desc->irq_data.irq赋值为参数irq, 实际上就是cat /proc/interrupts 第一列
+	desc->irq_data.irq = irq;       
 	desc->irq_data.chip = &no_irq_chip;
 	desc->irq_data.chip_data = NULL;
 	irq_settings_clr_and_set(desc, ~0, _IRQ_DEFAULT_INIT_FLAGS);
@@ -484,6 +485,7 @@ static int alloc_descs(unsigned int start, unsigned int cnt, int node,
 		irq_sysfs_add(start + i, desc);
 		irq_add_debugfs_entry(start + i, desc);
 	}
+    //赋值allocated_irqs
 	bitmap_set(allocated_irqs, start, cnt);
 	return start;
 

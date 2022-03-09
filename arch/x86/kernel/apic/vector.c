@@ -541,8 +541,10 @@ static int x86_vector_alloc_irqs(struct irq_domain *domain, unsigned int virq,
 		return -ENOSYS;
 
 	for (i = 0; i < nr_irqs; i++) {
+        //找到对应的irq_data
 		irqd = irq_domain_get_irq_data(domain, virq + i);
 		BUG_ON(!irqd);
+        //获取node
 		node = irq_data_get_node(irqd);
 		WARN_ON_ONCE(irqd->chip_data);
 		apicd = alloc_apic_chip_data(node);
@@ -551,10 +553,10 @@ static int x86_vector_alloc_irqs(struct irq_domain *domain, unsigned int virq,
 			goto error;
 		}
 
-		apicd->irq = virq + i;
+		apicd->irq = virq + i;              //设置irq
 		irqd->chip = &lapic_controller;
 		irqd->chip_data = apicd;
-		irqd->hwirq = virq + i;
+		irqd->hwirq = virq + i;             //相当于hwirq, 这里也就说明virq == hwirq
 		irqd_set_single_target(irqd);
 		/*
 		 * Legacy vectors are already assigned when the IOAPIC
@@ -704,6 +706,7 @@ int __init arch_early_irq_init(void)
 						   NULL);
 	BUG_ON(x86_vector_domain == NULL);
 	irq_domain_free_fwnode(fn);
+    //set default domain - irq_default_domain
 	irq_set_default_host(x86_vector_domain);
 
 	arch_init_msi_domain(x86_vector_domain);
