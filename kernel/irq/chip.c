@@ -1411,7 +1411,8 @@ int irq_chip_compose_msi_msg(struct irq_data *data, struct msi_msg *msg)
 			pos = data;
 	if (!pos)
 		return -ENOSYS;
-
+    //nvme : pos->chip : pci_msi_controller
+    //nvme : pos->chip->func : irq_msi_compose_msg
 	pos->chip->irq_compose_msi_msg(pos, msg);
 
 	return 0;

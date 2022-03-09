@@ -28,6 +28,7 @@ static struct irq_domain *msi_default_domain;
 
 static void irq_msi_compose_msg(struct irq_data *data, struct msi_msg *msg)
 {
+    //nvme: 第一次进来的时候，irq_cfg == x86_vector
 	struct irq_cfg *cfg = irqd_cfg(data);
 
 	msg->address_hi = MSI_ADDR_BASE_HI;

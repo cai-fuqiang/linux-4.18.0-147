@@ -35,11 +35,11 @@ int pci_msi_ignore_mask;
 static int pci_msi_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 {
 	struct irq_domain *domain;
-
+    //nvme : domain = NULL
 	domain = dev_get_msi_domain(&dev->dev);
 	if (domain && irq_domain_is_hierarchy(domain))
 		return msi_domain_alloc_irqs(domain, &dev->dev, nvec);
-
+    //nvme : goto here
 	return arch_setup_msi_irqs(dev, nvec, type);
 }
 

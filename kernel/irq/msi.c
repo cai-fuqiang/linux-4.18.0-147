@@ -120,7 +120,6 @@ static int msi_domain_activate(struct irq_domain *domain,
 			       struct irq_data *irq_data, bool early)
 {
 	struct msi_msg msg[2] = { [1] = { }, };
-
 	BUG_ON(irq_chip_compose_msi_msg(irq_data, msg));
 	msi_check_level(irq_data->domain, msg);
 	irq_chip_write_msi_msg(irq_data, msg);
@@ -155,6 +154,7 @@ static int msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	}
 
 	for (i = 0; i < nr_irqs; i++) {
+        //nvme : msi_domain_ops_init
 		ret = ops->msi_init(domain, info, virq + i, hwirq + i, arg);
 		if (ret < 0) {
 			if (ops->msi_free) {
@@ -308,6 +308,8 @@ int msi_domain_prepare_irqs(struct irq_domain *domain, struct device *dev,
 	int ret;
 
 	ret = ops->msi_check(domain, info, dev);
+    //nvme:  pci_msi_domain_ops
+    //  ops->msi_prepare : pci_msi_prepare
 	if (ret == 0)
 		ret = ops->msi_prepare(domain, dev, nvec, arg);
 

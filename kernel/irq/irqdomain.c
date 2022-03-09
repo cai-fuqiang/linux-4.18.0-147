@@ -480,6 +480,7 @@ static void irq_domain_set_mapping(struct irq_domain *domain,
 		domain->linear_revmap[hwirq] = irq_data->irq;
 	} else {
 		mutex_lock(&domain->revmap_tree_mutex);
+        //建立一个树， index : hwirq, entry : irq_data
 		radix_tree_insert(&domain->revmap_tree, hwirq, irq_data);
 		mutex_unlock(&domain->revmap_tree_mutex);
 	}
@@ -1288,7 +1289,8 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 			    bool realloc, const struct irq_affinity_desc *affinity)
 {
 	int i, ret, virq;
-
+    
+    //nvme : domain : msi_default_domain
 	if (domain == NULL) {
 		domain = irq_default_domain;
 		if (WARN(!domain, "domain is NULL; cannot allocate IRQ\n"))

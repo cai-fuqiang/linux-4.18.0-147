@@ -376,7 +376,7 @@ static struct irq_desc *alloc_desc(int irq, int node, unsigned int flags,
 				   struct module *owner)
 {
 	struct irq_desc *desc;
-
+    
 	desc = kzalloc_node(sizeof(*desc), GFP_KERNEL, node);
 	if (!desc)
 		return NULL;
@@ -387,7 +387,7 @@ static struct irq_desc *alloc_desc(int irq, int node, unsigned int flags,
 
 	if (alloc_masks(desc, node))
 		goto err_kstat;
-
+    
 	raw_spin_lock_init(&desc->lock);
 	lockdep_set_class(&desc->lock, &irq_desc_lock_class);
 	mutex_init(&desc->request_mutex);
