@@ -295,6 +295,7 @@ irq_create_affinity_masks(unsigned int nvecs, struct irq_affinity *affd)
 		return NULL;
 
 	/* Fill out vectors at the beginning that don't need affinity */
+    //pre_vectors使用的时irq_default_affinity
 	for (curvec = 0; curvec < affd->pre_vectors; curvec++)
 		cpumask_copy(&masks[curvec].mask, irq_default_affinity);
 
@@ -305,18 +306,22 @@ irq_create_affinity_masks(unsigned int nvecs, struct irq_affinity *affd)
 	for (i = 0, usedvecs = 0; i < affd->nr_sets; i++) {
 		unsigned int this_vecs = affd->set_size[i];
 		int ret;
-
+        //curvec : startvec
+        //this_vecs: affd->set_size[i] : end_vecs
 		ret = irq_build_affinity_masks(affd, curvec, this_vecs,
 					       curvec, masks);
 		if (ret) {
 			kfree(masks);
 			return NULL;
 		}
+        //curvec == ADD(affd->set_size[i]) + affd->pre_vectors
 		curvec += this_vecs;
+        //usedvecs == ADD(affd->set_size[i])
 		usedvecs += this_vecs;
 	}
 
 	/* Fill out vectors at the end that don't need affinity */
+    // On nvme driver, affvecs == usedvecs
 	if (usedvecs >= affvecs)
 		curvec = affd->pre_vectors + affvecs;
 	else

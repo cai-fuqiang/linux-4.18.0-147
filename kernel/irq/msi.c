@@ -39,6 +39,7 @@ struct msi_desc *alloc_msi_entry(struct device *dev, int nvec,
 	desc->dev = dev;
 	desc->nvec_used = nvec;
 	if (affinity) {
+        //在这里会复制affinity, 这样就将该MSIx的中断亲和性给赋值了
 		desc->affinity = kmemdup(affinity,
 			nvec * sizeof(*desc->affinity), GFP_KERNEL);
 		if (!desc->affinity) {

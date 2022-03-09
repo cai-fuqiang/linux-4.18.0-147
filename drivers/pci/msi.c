@@ -696,6 +696,7 @@ static int msix_setup_entries(struct pci_dev *dev, void __iomem *base,
 			entry->msi_attrib.entry_nr = entries[i].entry;
 		else
 			entry->msi_attrib.entry_nr = i;
+        //default_irq, 跟dev相关
 		entry->msi_attrib.default_irq	= dev->irq;
 		entry->mask_base		= base;
 
