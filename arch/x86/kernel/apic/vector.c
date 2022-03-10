@@ -547,6 +547,7 @@ static int x86_vector_alloc_irqs(struct irq_domain *domain, unsigned int virq,
         //获取node
 		node = irq_data_get_node(irqd);
 		WARN_ON_ONCE(irqd->chip_data);
+        //在alloc irqs的时, 会alloc apic_chip_data
 		apicd = alloc_apic_chip_data(node);
 		if (!apicd) {
 			err = -ENOMEM;
