@@ -315,14 +315,18 @@ unsigned long bitmap_find_next_zero_area_off(unsigned long *map,
 {
 	unsigned long index, end, i;
 again:
+    //找到第一个非0位
 	index = find_next_zero_bit(map, size, start);
 
 	/* Align allocation */
 	index = __ALIGN_MASK(index + align_offset, align_mask) - align_offset;
 
+    //获取end
 	end = index + nr;
+    //比最后大，返回end
 	if (end > size)
 		return end;
+    //???? 这个得再看下
 	i = find_next_bit(map, end, index);
 	if (i < end) {
 		start = i + 1;

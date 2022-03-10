@@ -136,10 +136,10 @@ static unsigned int matrix_find_best_cpu(struct irq_matrix *m,
 
 	for_each_cpu(cpu, msk) {
 		cm = per_cpu_ptr(m->maps, cpu);
-
+        //选择必须online，而且cm->available最多的cpu。
 		if (!cm->online || cm->available <= maxavl)
 			continue;
-
+        //将best_cpu返回
 		best_cpu = cpu;
 		maxavl = cm->available;
 	}
@@ -379,12 +379,14 @@ int irq_matrix_alloc(struct irq_matrix *m, const struct cpumask *msk,
 {
 	unsigned int cpu, bit;
 	struct cpumap *cm;
-
+    
+    //找到最合适分配的cpu, 当然是从msk中获取(先前设置好的中断亲和性)
 	cpu = matrix_find_best_cpu(m, msk);
 	if (cpu == UINT_MAX)
 		return -ENOSPC;
 
 	cm = per_cpu_ptr(m->maps, cpu);
+    //从cm中获取bit，实际上也就是获取vector
 	bit = matrix_alloc_area(m, cm, 1, false);
 	if (bit >= m->alloc_end)
 		return -ENOSPC;
