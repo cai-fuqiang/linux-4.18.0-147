@@ -803,13 +803,16 @@ static resource_size_t calculate_memsize(resource_size_t size,
 		resource_size_t old_size,
 		resource_size_t align)
 {
+    //如果小于最小size
 	if (size < min_size)
 		size = min_size;
+    //old_size == 1 ====> 0
 	if (old_size == 1)
 		old_size = 0;
+    //不能比old_size小
 	if (size < old_size)
 		size = old_size;
-
+    
 	size = ALIGN(max(size, add_size) + children_add_size, align);
 	return size;
 }
@@ -1182,7 +1185,7 @@ void __pci_bus_size_bridges(struct pci_bus *bus, struct list_head *realloc_head)
 	int ret;
 
 	list_for_each_entry(dev, &bus->devices, bus_list) {
-		struct pci_bus *b = dev->subordinate;
+		struct pci_bus *b = dev->subordinate;       //查看该bus下有没有子bus(取得是最底层的)
 		if (!b)
 			continue;
 
@@ -1197,9 +1200,9 @@ void __pci_bus_size_bridges(struct pci_bus *bus, struct list_head *realloc_head)
 			break;
 		}
 	}
-
+    
 	/* The root bus? */
-	if (pci_is_root_bus(bus))
+	if (pci_is_root_bus(bus))       //如果是root_bus 返回
 		return;
 
 	switch (bus->self->class >> 8) {
