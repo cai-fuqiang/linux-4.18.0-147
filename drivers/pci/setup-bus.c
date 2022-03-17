@@ -1728,6 +1728,8 @@ void pci_assign_unassigned_root_bus_resources(struct pci_bus *bus)
 	enum enable_type enable_local;
 
 	/* don't realloc if asked to do so */
+    //commit f483d3923dc3a6394c483e28ccb3fe700bdf399e
+    // PCI: conditional resource-reallocation through kernel parameter pci=realloc
 	enable_local = pci_realloc_detect(bus, pci_realloc_enable);
 	if (pci_realloc_enabled(enable_local)) {
 		int max_depth = pci_bus_get_depth(bus);
