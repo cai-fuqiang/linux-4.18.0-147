@@ -506,7 +506,7 @@ static inline int pci_channel_offline(struct pci_dev *pdev)
 }
 
 struct pci_host_bridge {
-	struct device	dev;
+	struct device	dev;        //bus->bridge
 	struct pci_bus	*bus;		/* Root bus */
 	struct pci_ops	*ops;
 	void		*sysdata;
@@ -592,6 +592,7 @@ struct pci_bus {
 	struct list_head slots;		/* List of slots on this bus;
 					   protected by pci_slot_mutex */
 	struct resource *resource[PCI_BRIDGE_RESOURCE_NUM];
+    //到这个总线的address space ?
 	struct list_head resources;	/* Address space routed to this bus */
 	struct resource busn_res;	/* Bus numbers routed to this bus */
 

@@ -597,7 +597,8 @@ static int acpi_pci_root_add(struct acpi_device *device,
 	       root->segment, &root->secondary);
 
 	root->mcfg_addr = acpi_pci_root_get_mcfg_addr(handle);
-
+    
+    //device->pnp.ids (is a list_head, select *(struct acpi_hardware_id *)ids->next)
 	is_pcie = strcmp(acpi_device_hid(device), "PNP0A08") == 0;
 	negotiate_os_control(root, &no_aspm, is_pcie);
 
@@ -612,6 +613,7 @@ static int acpi_pci_root_add(struct acpi_device *device,
 	 * PCI namespace does not get created until this call is made (and
 	 * thus the root bridge's pci_dev does not exist).
 	 */
+    //在这里scan root
 	root->bus = pci_acpi_scan_root(root);
 	if (!root->bus) {
 		dev_err(&device->dev,

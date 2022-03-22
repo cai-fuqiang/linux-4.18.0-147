@@ -137,15 +137,18 @@ static inline unsigned long decode_bar(struct pci_dev *dev, u32 bar)
 {
 	u32 mem_type;
 	unsigned long flags;
-
+    //查看该bar映射的是否是IO空间
 	if ((bar & PCI_BASE_ADDRESS_SPACE) == PCI_BASE_ADDRESS_SPACE_IO) {
+        //获取flags
 		flags = bar & ~PCI_BASE_ADDRESS_IO_MASK;
 		flags |= IORESOURCE_IO;
 		return flags;
 	}
-
+    //这里说明该bar是mem
+    //获取flags
 	flags = bar & ~PCI_BASE_ADDRESS_MEM_MASK;
 	flags |= IORESOURCE_MEM;
+    //从flags中判断是否是prefetch mem
 	if (flags & PCI_BASE_ADDRESS_MEM_PREFETCH)
 		flags |= IORESOURCE_PREFETCH;
 
@@ -153,9 +156,14 @@ static inline unsigned long decode_bar(struct pci_dev *dev, u32 bar)
 	switch (mem_type) {
 	case PCI_BASE_ADDRESS_MEM_TYPE_32:
 		break;
+    //7.5.1.2.1 Base Address Registers (Offset 10h - 24h) 脚注:140
+    //The encoding to support memory space below 1 MB was supported 
+    //in an earlier version of the PCI Local Bus Specification. System software should recognize
+    //this encoding and handle it appropriately.
 	case PCI_BASE_ADDRESS_MEM_TYPE_1M:
 		/* 1M mem BAR treated as 32-bit BAR */
 		break;
+    //64 bit wide bar
 	case PCI_BASE_ADDRESS_MEM_TYPE_64:
 		flags |= IORESOURCE_MEM_64;
 		break;
@@ -191,16 +199,21 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 	if (!dev->mmio_always_on) {
 		pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
 		if (orig_cmd & PCI_COMMAND_DECODE_ENABLE) {
+            //在原来的command中把 PCI_COMMAND_MEMORY | PCI_COMMAND_IO 这两位给删除了?
 			pci_write_config_word(dev, PCI_COMMAND,
 				orig_cmd & ~PCI_COMMAND_DECODE_ENABLE);
 		}
 	}
 
 	res->name = pci_name(dev);
-
+    //读到l中
 	pci_read_config_dword(dev, pos, &l);
+    //和mask做一个或运算，mask在type == pci_bar_unknow为0xffff
+    //所以当type == pci_bar_unknow时，执行的是写入0xffff, 用来获取bar空间大小
 	pci_write_config_dword(dev, pos, l | mask);
+    //获取bar空间大小
 	pci_read_config_dword(dev, pos, &sz);
+    //写入原来的值
 	pci_write_config_dword(dev, pos, l);
 
 	/*
@@ -221,7 +234,9 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 
 	if (type == pci_bar_unknown) {
 		res->flags = decode_bar(dev, l);
+        //如果是unknown的话，res->flags |= IORESOUCE_SIZEALIGN !!!!
 		res->flags |= IORESOURCE_SIZEALIGN;
+        //下面在取addr和size以及mask
 		if (res->flags & IORESOURCE_IO) {
 			l64 = l & PCI_BASE_ADDRESS_IO_MASK;
 			sz64 = sz & PCI_BASE_ADDRESS_IO_MASK;
@@ -249,7 +264,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 		sz64 |= ((u64)sz << 32);
 		mask64 |= ((u64)~0 << 32);
 	}
-
+    //这个是否需要把原来的位恢复，还需要再看下手册
 	if (!dev->mmio_always_on && (orig_cmd & PCI_COMMAND_DECODE_ENABLE))
 		pci_write_config_word(dev, PCI_COMMAND, orig_cmd);
 
@@ -335,6 +350,7 @@ static void pci_read_bases(struct pci_dev *dev, unsigned int howmany, int rom)
 
 	for (pos = 0; pos < howmany; pos++) {
 		struct resource *res = &dev->resource[pos];
+        //<<2 == * 4 , 实际上是32bit，4 byte， 一个base address register为 4byte
 		reg = PCI_BASE_ADDRESS_0 + (pos << 2);
 		pos += __pci_read_base(dev, pci_bar_unknown, res, reg);
 	}
@@ -1725,9 +1741,11 @@ int pci_setup_device(struct pci_dev *dev)
 
 	switch (dev->hdr_type) {		    /* header type */
 	case PCI_HEADER_TYPE_NORMAL:		    /* standard header */
+        //表示endpoint
 		if (class == PCI_CLASS_BRIDGE_PCI)
 			goto bad;
 		pci_read_irq(dev);
+        //bar空间有6个
 		pci_read_bases(dev, 6, PCI_ROM_ADDRESS);
 
 		pci_subsystem_ids(dev, &dev->subsystem_vendor, &dev->subsystem_device);

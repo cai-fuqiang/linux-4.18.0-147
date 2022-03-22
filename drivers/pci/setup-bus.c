@@ -62,7 +62,7 @@ static int add_to_list(struct list_head *head,
 		 resource_size_t add_size, resource_size_t min_align)
 {
 	struct pci_dev_resource *tmp;
-
+    //分配一个pci_dev_resource, 并将该成员链入 add_list中
 	tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
 	if (!tmp)
 		return -ENOMEM;
@@ -141,7 +141,7 @@ static void pdev_sort_resources(struct pci_dev *dev, struct list_head *head)
 
 		if (r->flags & IORESOURCE_PCI_FIXED)
 			continue;
-
+        //必须是r->parent == NULL
 		if (!(r->flags) || r->parent)
 			continue;
 
@@ -151,10 +151,11 @@ static void pdev_sort_resources(struct pci_dev *dev, struct list_head *head)
 				 i, r);
 			continue;
 		}
-
+        //alloc struct pci_dev_resource
 		tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
 		if (!tmp)
 			panic("pdev_sort_resources(): kmalloc() failed!\n");
+        //赋值res dev
 		tmp->res = r;
 		tmp->dev = dev;
 
@@ -165,7 +166,7 @@ static void pdev_sort_resources(struct pci_dev *dev, struct list_head *head)
 
 			align = pci_resource_alignment(dev_res->dev,
 							 dev_res->res);
-
+            //按顺序, 从小到大
 			if (r_align > align) {
 				n = &dev_res->list;
 				break;
@@ -182,6 +183,7 @@ static void __dev_sort_resources(struct pci_dev *dev,
 	u16 class = dev->class >> 8;
 
 	/* Don't touch classless devices or host bridges or ioapics.  */
+    //host bridge跳过
 	if (class == PCI_CLASS_NOT_DEFINED || class == PCI_CLASS_BRIDGE_HOST)
 		return;
 
@@ -876,6 +878,7 @@ static void pbus_size_io(struct pci_bus *bus, resource_size_t min_size,
 		return;
 
 	min_align = window_alignment(bus, IORESOURCE_IO);
+    //计算整个bus的空间
 	list_for_each_entry(dev, &bus->devices, bus_list) {
 		int i;
 
@@ -896,7 +899,7 @@ static void pbus_size_io(struct pci_bus *bus, resource_size_t min_size,
 			align = pci_resource_alignment(dev, r);
 			if (align > min_align)
 				min_align = align;
-
+            //如果有realloc_head的话，将children_add_size加上realloc_head中
 			if (realloc_head)
 				children_add_size += get_res_add_size(realloc_head, r);
 		}
@@ -904,6 +907,12 @@ static void pbus_size_io(struct pci_bus *bus, resource_size_t min_size,
 
 	size0 = calculate_iosize(size, min_size, size1, 0, 0,
 			resource_size(b_res), min_align);
+    /*
+     * 1. 如果没有realloc_head ，size1 = size0
+     * 2. 如果有realloc_head，并且没有add_size没有child_add_size，size1= size0
+     * 3. 如果有realloc_head, 并且add_size或child_add_size不为0，重新计算下
+     */
+    //如果没有realloc_head, size1 == size0 ,这里只计算min_size，而不计算add_size
 	size1 = (!realloc_head || (realloc_head && !add_size && !children_add_size)) ? size0 :
 		calculate_iosize(size, min_size, size1, add_size, children_add_size,
 			resource_size(b_res), min_align);
@@ -914,11 +923,12 @@ static void pbus_size_io(struct pci_bus *bus, resource_size_t min_size,
 		b_res->flags = 0;
 		return;
 	}
-
+    //无论那种情况，b_res->end = b_res->start + size0 -1, 也就是桥本身所增加的size
 	b_res->start = min_align;
 	b_res->end = b_res->start + size0 - 1;
 	b_res->flags |= IORESOURCE_STARTALIGN;
 	if (size1 > size0 && realloc_head) {
+        //假如说有realloc head的话，将
 		add_to_list(realloc_head, bus->self, b_res, size1-size0,
 			    min_align);
 		pci_printk(KERN_DEBUG, bus->self, "bridge window %pR to %pR add_size %llx\n",
@@ -1218,6 +1228,17 @@ void __pci_bus_size_bridges(struct pci_bus *bus, struct list_head *realloc_head)
 		}
 		/* Fall through */
 	default:
+		/*
+		 * 1. commit c8adf9a3e873eddaaec11ac410a99ef6b9656938 (add realloc_head)
+		 * PCI: pre-allocate additional resources to devices only after 
+		 * successful allocation of essential resources. 
+         *
+		 * 2. commit 19aa7ee432cec00b647443719eb5c055b69a5e8e
+		 * PCI: make re-allocation try harder by reassigning ranges higher in the heirarchy
+		 */
+        /*
+         * 如果有realloc_head, min_size为0
+         */
 		pbus_size_io(bus, realloc_head ? 0 : additional_io_size,
 			     additional_io_size, realloc_head);
 

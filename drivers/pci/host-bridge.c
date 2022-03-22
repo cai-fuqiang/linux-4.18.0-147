@@ -87,7 +87,7 @@ void pcibios_bus_to_resource(struct pci_bus *bus, struct resource *res,
 
 		bus_region.start = window->res->start - window->offset;
 		bus_region.end = window->res->end - window->offset;
-
+        //寻找一个bus resource，使其resource是 bus resource的子集
 		if (region_contains(&bus_region, region)) {
 			offset = window->offset;
 			break;

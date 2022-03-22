@@ -322,8 +322,8 @@ int pci_assign_resource(struct pci_dev *dev, int resno)
 			 resno, res);
 		return -EINVAL;
 	}
-
 	size = resource_size(res);
+    //
 	ret = _pci_assign_resource(dev, resno, size, align);
 
 	/*
