@@ -298,6 +298,7 @@ static int _pci_assign_resource(struct pci_dev *dev, int resno,
 
 	bus = dev->bus;
 	while ((ret = __pci_assign_resource(bus, dev, resno, size, min_align))) {
+        //在这会找bus->parent， 在上层的bus中找资源
 		if (!bus->parent || !bus->self->transparent)
 			break;
 		bus = bus->parent;
@@ -323,7 +324,7 @@ int pci_assign_resource(struct pci_dev *dev, int resno)
 		return -EINVAL;
 	}
 	size = resource_size(res);
-    //
+    
 	ret = _pci_assign_resource(dev, resno, size, align);
 
 	/*

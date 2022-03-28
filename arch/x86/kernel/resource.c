@@ -17,6 +17,7 @@ static void resource_clip(struct resource *res, resource_size_t start,
 		high = res->end - end;
 
 	/* Keep the area above or below the conflict, whichever is larger */
+    //看哪个空间比较大, 分配哪个
 	if (low > high)
 		res->end = start - 1;
 	else
@@ -43,6 +44,7 @@ void arch_remove_reservations(struct resource *avail)
 	 * the low 1MB unconditionally, as this area is needed for some ISA
 	 * cards requiring a memory range, e.g. the i82365 PCMCIA controller.
 	 */
+    //在bios_rom_base和bios_rom_end之外分配
 	if (avail->flags & IORESOURCE_MEM) {
 		resource_clip(avail, BIOS_ROM_BASE, BIOS_ROM_END);
 

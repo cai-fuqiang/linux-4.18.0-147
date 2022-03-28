@@ -166,7 +166,7 @@ static int pci_bus_alloc_from_region(struct pci_bus *bus, struct resource *res,
 	resource_size_t max;
 
 	type_mask |= IORESOURCE_TYPE_BITS;
-
+    //查找各个bus的resource
 	pci_bus_for_each_resource(bus, r, i) {
 		resource_size_t min_used = min;
 
@@ -188,8 +188,8 @@ static int pci_bus_alloc_from_region(struct pci_bus *bus, struct resource *res,
 
 		/*
 		 * "min" is typically PCIBIOS_MIN_IO or PCIBIOS_MIN_MEM to
-		 * protect badly documented motherboard resources, but if
-		 * this is an already-configured bridge window, its start
+		 * protect badly documented motherboard resources(记录的很糟糕的主板), 
+         * but if this is an already-configured bridge window, its start
 		 * overrides "min".
 		 */
 		if (avail.start)

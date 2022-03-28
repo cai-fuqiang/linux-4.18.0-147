@@ -53,8 +53,9 @@ void pcibios_resource_to_bus(struct pci_bus *bus, struct pci_bus_region *region,
 	struct pci_host_bridge *bridge = pci_find_host_bridge(bus);
 	struct resource_entry *window;
 	resource_size_t offset = 0;
-
+    //遍历各个bridge->windows
 	resource_list_for_each_entry(window, &bridge->windows) {
+        //查看res是否在window->res中
 		if (resource_contains(window->res, res)) {
 			offset = window->offset;
 			break;
@@ -75,6 +76,7 @@ static bool region_contains(struct pci_bus_region *region1,
 void pcibios_bus_to_resource(struct pci_bus *bus, struct resource *res,
 			     struct pci_bus_region *region)
 {
+    //寻找host_bridge
 	struct pci_host_bridge *bridge = pci_find_host_bridge(bus);
 	struct resource_entry *window;
 	resource_size_t offset = 0;

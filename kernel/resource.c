@@ -256,6 +256,7 @@ static void __release_child_resources(struct resource *r)
 		printk(KERN_DEBUG "release child resource %pR\n", tmp);
 		/* need to restore size, and keep flags */
 		size = resource_size(tmp);
+        //将res->start 和 end 修改为 0, size-1
 		tmp->start = 0;
 		tmp->end = size - 1;
 	}
@@ -586,6 +587,10 @@ static int __find_resource(struct resource *root, struct resource *old,
 		tmp.start = (this == old) ? old->start : this->end + 1;
 		this = this->sibling;
 	}
+    /*
+     * child_resource : [1, 100]  [200, 300] [400,500]
+     * tmp : [101, 199] [301, 399]
+     */
 	for(;;) {
 		if (this)
 			tmp.end = (this == old) ?  this->end : this->start - 1;
@@ -615,7 +620,8 @@ static int __find_resource(struct resource *root, struct resource *old,
 			}
 		}
 
-next:		if (!this || this->end == root->end)
+next:		
+        if (!this || this->end == root->end)
 			break;
 
 		if (this != old)

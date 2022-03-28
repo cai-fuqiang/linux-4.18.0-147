@@ -141,7 +141,7 @@ static void pdev_sort_resources(struct pci_dev *dev, struct list_head *head)
 
 		if (r->flags & IORESOURCE_PCI_FIXED)
 			continue;
-        //必须是r->parent == NULL
+        //必须是r->parent == NULL, 如果r->flags 也直接continue了
 		if (!(r->flags) || r->parent)
 			continue;
 
@@ -163,7 +163,7 @@ static void pdev_sort_resources(struct pci_dev *dev, struct list_head *head)
 		n = head;
 		list_for_each_entry(dev_res, head, list) {
 			resource_size_t align;
-
+            //根据align去排序
 			align = pci_resource_alignment(dev_res->dev,
 							 dev_res->res);
             //按顺序, 从小到大
@@ -287,6 +287,7 @@ static void assign_requested_resources_sorted(struct list_head *head,
 
 	list_for_each_entry(dev_res, head, list) {
 		res = dev_res->res;
+        //res 所在的idx
 		idx = res - &dev_res->dev->resource[0];
 		if (resource_size(res) &&
 		    pci_assign_resource(dev_res->dev, idx)) {
@@ -354,14 +355,14 @@ static void __assign_resources_sorted(struct list_head *head,
 {
 	/*
 	 * Should not assign requested resources at first.
-	 *   they could be adjacent, so later reassign can not reallocate
+	 *   they could be adjacent(相邻的), so later reassign can not reallocate
 	 *   them one by one in parent resource window.
 	 * Try to assign requested + add_size at beginning
 	 *  if could do that, could get out early.
 	 *  if could not do that, we still try to assign requested at first,
 	 *    then try to reassign add_size for some resources.
 	 *
-	 * Separate three resource type checking if we need to release
+	 * Separate(单独的) three resource type checking if we need to release
 	 * assigned resource after requested + add_size try.
 	 *	1. if there is io port assign fail, will release assigned
 	 *	   io port.
@@ -381,6 +382,7 @@ static void __assign_resources_sorted(struct list_head *head,
 	resource_size_t add_align, align;
 
 	/* Check if optional add_size is there */
+    //如果没有realloc_head或者realloc_head为空
 	if (!realloc_head || list_empty(realloc_head))
 		goto requested_and_reassign;
 
@@ -594,6 +596,7 @@ static void pci_setup_bridge_io(struct pci_dev *bridge)
 	pcibios_resource_to_bus(bridge->bus, &region, res);
 	if (res->flags & IORESOURCE_IO) {
 		pci_read_config_word(bridge, PCI_IO_BASE, &l);
+        //这里的**_lo是指的local的意思
 		io_base_lo = (region.start >> 8) & io_mask;
 		io_limit_lo = (region.end >> 8) & io_mask;
 		l = ((u16) io_limit_lo << 8) | io_base_lo;
@@ -885,7 +888,7 @@ static void pbus_size_io(struct pci_bus *bus, resource_size_t min_size,
 		for (i = 0; i < PCI_NUM_RESOURCES; i++) {
 			struct resource *r = &dev->resource[i];
 			unsigned long r_size;
-
+            //在这个地方如果r->flags为0的话，直接continue
 			if (r->parent || !(r->flags & IORESOURCE_IO))
 				continue;
 			r_size = resource_size(r);
@@ -1238,6 +1241,11 @@ void __pci_bus_size_bridges(struct pci_bus *bus, struct list_head *realloc_head)
 		 */
         /*
          * 如果有realloc_head, min_size为0
+         * 先尽量满足additonal_io_size(如果没有realloc_head的话，min_size为
+         * additional_io_size)
+         *
+         * 如果到了最后一轮，（有realloc_head, 说明资源少），min_size为0，
+         * 可以不满足addtional_io_size(min_size为0， add_size为additional_io_size)
          */
 		pbus_size_io(bus, realloc_head ? 0 : additional_io_size,
 			     additional_io_size, realloc_head);
@@ -1515,7 +1523,7 @@ static void pci_bridge_release_resources(struct pci_bus *bus,
 	unsigned old_flags = 0;
 	struct resource *b_res;
 	int idx = 1;
-
+    //释放bridge->resource
 	b_res = &dev->resource[PCI_BRIDGE_RESOURCES];
 
 	/*
@@ -1532,14 +1540,19 @@ static void pci_bridge_release_resources(struct pci_bus *bus,
 	 */
 	if (type & IORESOURCE_IO)
 		idx = 0;
+    //如果是non-prefetch resource, idx=1
 	else if (!(type & IORESOURCE_PREFETCH))
 		idx = 1;
+    //如果是64 bit mem, 并且b_res[2] 是64 mem, idx=2
 	else if ((type & IORESOURCE_MEM_64) &&
 		 (b_res[2].flags & IORESOURCE_MEM_64))
 		idx = 2;
+    //为32 bit，并且b_res[2] 是 pref的
 	else if (!(b_res[2].flags & IORESOURCE_MEM_64) &&
 		 (b_res[2].flags & IORESOURCE_PREFETCH))
 		idx = 2;
+    //为32 bit, 并且b_res[2] 不是pref的
+    //为64 bit, b_res[2]不是64bit
 	else
 		idx = 1;
 
@@ -1795,6 +1808,7 @@ again:
 	dev_printk(KERN_DEBUG, &bus->dev,
 		   "No. %d try to assign unassigned res\n", tried_times + 1);
 
+    //如果尝试次数超过两次，则考虑free whole subtree
 	/* third times and later will not check if it is leaf */
 	if ((tried_times + 1) > 2)
 		rel_type = whole_subtree;
@@ -1821,7 +1835,9 @@ again:
 	free_list(&fail_head);
 
 	goto again;
-
+    //上面整套的循环逻辑在
+    //commit 977d17bb1749517b353874ccdc9b85abc7a58c2a
+    //PCI: update bridge resources to get more big ranges in PCI assign unssigned
 dump:
 	/* dump the resource on buses */
 	pci_bus_dump_resources(bus);
