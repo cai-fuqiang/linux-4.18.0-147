@@ -387,6 +387,7 @@ static void __assign_resources_sorted(struct list_head *head,
 		goto requested_and_reassign;
 
 	/* Save original start, end, flags etc at first */
+    //save的时候，还没有加add_size
 	list_for_each_entry(dev_res, head, list) {
 		if (add_to_list(&save_head, dev_res->dev, dev_res->res, 0, 0)) {
 			free_list(&save_head);
@@ -458,6 +459,7 @@ static void __assign_resources_sorted(struct list_head *head,
 			/* remove it from realloc_head list */
 			remove_from_list(realloc_head, dev_res->res);
 			remove_from_list(&save_head, dev_res->res);
+            //这个是在head里面删除
 			list_del(&dev_res->list);
 			kfree(dev_res);
 		}
@@ -468,6 +470,7 @@ static void __assign_resources_sorted(struct list_head *head,
 		if (dev_res->res->parent)
 			release_resource(dev_res->res);
 	/* Restore start/end/flags from saved list */
+    //在这里恢复了下
 	list_for_each_entry(save_res, &save_head, list) {
 		struct resource *res = save_res->res;
 
@@ -483,6 +486,7 @@ requested_and_reassign:
 
 	/* Try to satisfy any additional optional resource
 		requests */
+	//这里为什么reassign一下
 	if (realloc_head)
 		reassign_resources_sorted(realloc_head, head);
 	free_list(head);
@@ -879,7 +883,8 @@ static void pbus_size_io(struct pci_bus *bus, resource_size_t min_size,
 
 	if (!b_res)
 		return;
-
+    //commit : fd591341102ba5eb9e517d3889e7566fa45e021e
+    
 	min_align = window_alignment(bus, IORESOURCE_IO);
     //计算整个bus的空间
 	list_for_each_entry(dev, &bus->devices, bus_list) {

@@ -588,11 +588,12 @@ static int __find_resource(struct resource *root, struct resource *old,
 		this = this->sibling;
 	}
     /*
-     * child_resource : [1, 100]  [200, 300] [400,500]
-     * tmp : [101, 199] [301, 399]
+     * child_resource : [1, 100]  [200, 300] [400,500] [600,700]
+     * tmp : [101, 199] [301, 399], [501, 599]
      */
 	for(;;) {
 		if (this)
+            //if this==old, this is reassign
 			tmp.end = (this == old) ?  this->end : this->start - 1;
 		else
 			tmp.end = root->end;

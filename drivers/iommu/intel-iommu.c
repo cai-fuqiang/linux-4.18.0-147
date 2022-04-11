@@ -3950,11 +3950,11 @@ static int __init iommu_init_mempool(void)
 	ret = iova_cache_get();
 	if (ret)
 		return ret;
-
+	//dmar_domain
 	ret = iommu_domain_cache_init();
 	if (ret)
 		goto domain_error;
-
+	//device_domain_info
 	ret = iommu_devinfo_cache_init();
 	if (!ret)
 		return ret;

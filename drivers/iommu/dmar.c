@@ -99,6 +99,7 @@ void *dmar_alloc_dev_scope(void *start, void *end, int *cnt)
 		    scope->entry_type == ACPI_DMAR_SCOPE_TYPE_ENDPOINT ||
 		    scope->entry_type == ACPI_DMAR_SCOPE_TYPE_BRIDGE)
 			(*cnt)++;
+		//关于IOAPIC和HPET不进行分配dev_scope
 		else if (scope->entry_type != ACPI_DMAR_SCOPE_TYPE_IOAPIC &&
 			scope->entry_type != ACPI_DMAR_SCOPE_TYPE_HPET) {
 			pr_warn("Unsupported device scope\n");
@@ -168,6 +169,7 @@ dmar_alloc_pci_notify_info(struct pci_dev *dev, unsigned long event)
 			info->path[level].bus = tmp->bus->number;
 			info->path[level].device = PCI_SLOT(tmp->devfn);
 			info->path[level].function = PCI_FUNC(tmp->devfn);
+			//只赋值了root_bus
 			if (pci_is_root_bus(tmp->bus))
 				info->bus = tmp->bus->number;
 		}
@@ -209,6 +211,7 @@ fallback:
 	if (bus              == info->path[i].bus &&
 	    path[0].device   == info->path[i].device &&
 	    path[0].function == info->path[i].function) {
+		//!!!这个情况需要在看下
 		pr_info(FW_BUG "RMRR entry for device %02x:%02x.%x is broken - applying workaround\n",
 			bus, path[0].device, path[0].function);
 		return true;
@@ -233,11 +236,13 @@ int dmar_insert_dev_scope(struct dmar_pci_notify_info *info,
 
 	for (; start < end; start += scope->length) {
 		scope = start;
+		//只对比endpoint和bridge
 		if (scope->entry_type != ACPI_DMAR_SCOPE_TYPE_ENDPOINT &&
 		    scope->entry_type != ACPI_DMAR_SCOPE_TYPE_BRIDGE)
 			continue;
 
 		path = (struct acpi_dmar_pci_path *)(scope + 1);
+		//计算level
 		level = (scope->length - sizeof(*scope)) / sizeof(*path);
 		if (!dmar_match_pci_path(info, scope->bus, path, level))
 			continue;
@@ -307,6 +312,8 @@ static int dmar_pci_bus_add_dev(struct dmar_pci_notify_info *info)
 
 		drhd = container_of(dmaru->hdr,
 				    struct acpi_dmar_hardware_unit, header);
+		//DMA Remapping Hardware Unit Definition Structure 
+		//head + 1  = Device Scope
 		ret = dmar_insert_dev_scope(info, (void *)(drhd + 1),
 				((void *)drhd) + drhd->header.length,
 				dmaru->segment,
@@ -939,20 +946,20 @@ static int map_iommu(struct intel_iommu *iommu, u64 phys_addr)
 
 	iommu->reg_phys = phys_addr;
 	iommu->reg_size = VTD_PAGE_SIZE;
-
+	//直接向iomem_resource中申请资源
 	if (!request_mem_region(iommu->reg_phys, iommu->reg_size, iommu->name)) {
 		pr_err("Can't reserve memory\n");
 		err = -EBUSY;
 		goto out;
 	}
-
+	//做ioremap，可访问该物理地址
 	iommu->reg = ioremap(iommu->reg_phys, iommu->reg_size);
 	if (!iommu->reg) {
 		pr_err("Can't map the region\n");
 		err = -ENOMEM;
 		goto release;
 	}
-
+	//readq mov
 	iommu->cap = dmar_readq(iommu->reg + DMAR_CAP_REG);
 	iommu->ecap = dmar_readq(iommu->reg + DMAR_ECAP_REG);
 
@@ -1073,6 +1080,9 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 		(unsigned long long)iommu->ecap);
 
 	/* Reflect status in gcmd */
+	//DMAR_STS_REG: Register to report 
+	//general remapping hardware status.
+	//实际上为当前dmar某些功能的状态
 	sts = readl(iommu->reg + DMAR_GSTS_REG);
 	if (sts & DMA_GSTS_IRES)
 		iommu->gcmd |= DMA_GCMD_IRE;
