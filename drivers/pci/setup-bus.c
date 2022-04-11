@@ -1230,6 +1230,8 @@ void __pci_bus_size_bridges(struct pci_bus *bus, struct list_head *realloc_head)
 
 	case PCI_CLASS_BRIDGE_PCI:
 		pci_bridge_check_ranges(bus);
+        //28760489a3f1e136c5ae8581c0fa8f63511f2f4c
+        //PCI: pcie: Ensure hotplug ports have a minimum number of resources
 		if (bus->self->is_hotplug_bridge) {
 			additional_io_size  = pci_hotplug_io_size;
 			additional_mem_size = pci_hotplug_mem_size;
